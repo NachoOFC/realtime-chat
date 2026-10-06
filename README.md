@@ -1,34 +1,25 @@
 # Realtime Chat
 
-A simple real-time chat application built with WebSockets.
+Aplicación de chat en tiempo real utilizando WebSockets.
 
-The project is mainly focused on understanding how real-time communication works between clients and a backend.
+El proyecto nace como una forma de aprender y experimentar con comunicación en tiempo real entre clientes y servidor.
 
-## Stack
+## Tecnologías
 
 - Frontend: Nuxt 3
 - Backend: Go
-- Communication: WebSockets
-- Database: PostgreSQL
-- Deployment: Render
+- WebSockets
+- PostgreSQL
+- Render
 
-## Features
+## Funcionalidades
 
-- Real-time messaging
-- Multiple connected users
-- WebSocket connection handling
-- Online users
-- Message history
+- Mensajes en tiempo real
+- Múltiples usuarios conectados
+- Conexiones mediante WebSocket
+- Usuarios conectados
+- Historial de mensajes
 
-## Running locally
+## Estado
 
-```bash
-git clone https://github.com/NachoOFC/realtime-chat.git
-cd realtime-chat
-```
-
-Then follow the setup instructions inside `frontend/` and `backend/`.
-
-## Status
-
-🚧 In development
+🚧 En desarrollo
