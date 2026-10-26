@@ -1,0 +1,5 @@
+{
+  "name": "realtime-chat",
+  "private": true,
+  "packageManager": "pnpm@12.14.0"
+}

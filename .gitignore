@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Nuxt
+.nuxt/
+.output/
+.nitro/
+.cache/
+dist/
+.data/
+frontend/.nuxt/
+frontend/.output/
+
+# Environment
+.env
+.env.local
+.env.*.local
+frontend/.env
+backend/.env
+
+# Go
+backend/bin/
+backend/tmp/
+*.exe
+*.test
+*.out
+coverage.out
+
+# Logs
+*.log
+logs/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
