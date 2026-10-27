@@ -40,6 +40,7 @@ function submit() {
 
   if (demoMode.value) {
     chat.updateConversationPreview(optimistic)
+    chat.simulateBotReply(props.conversationId, text)
     return
   }
 

@@ -17,6 +17,20 @@ const lucia: User = { id: 'demo-lucia', username: 'Lucía', isGuest: true }
 const martin: User = { id: 'demo-martin', username: 'Martín', isGuest: true }
 const sofia: User = { id: 'demo-sofia', username: 'Sofía', isGuest: true }
 
+export const demoBotConversationId = 'demo-conv-bot'
+export const demoBot: User = { id: 'demo-iachat', username: 'IACHAT', isGuest: true }
+
+const botMessages: Message[] = [
+  {
+    id: 'demo-bot-m1',
+    conversationId: demoBotConversationId,
+    senderId: demoBot.id,
+    content: 'Hola, soy IACHAT. Escribí "ayuda" para ver qué puedo hacer.',
+    createdAt: minutesAgo(5),
+    status: 'read',
+  },
+]
+
 const firstConversationMessages: Message[] = [
   {
     id: 'demo-m1',
@@ -100,6 +114,13 @@ const thirdConversationMessages: Message[] = [
 
 export const demoConversations: Conversation[] = [
   {
+    id: demoBotConversationId,
+    peer: demoBot,
+    lastMessage: botMessages[0],
+    unreadCount: 0,
+    updatedAt: botMessages[0]!.createdAt,
+  },
+  {
     id: 'demo-conv-1',
     peer: lucia,
     lastMessage: firstConversationMessages[3],
@@ -123,6 +144,7 @@ export const demoConversations: Conversation[] = [
 ]
 
 export const demoMessagesByConversation: Record<string, Message[]> = {
+  [demoBotConversationId]: botMessages,
   'demo-conv-1': firstConversationMessages,
   'demo-conv-2': secondConversationMessages,
   'demo-conv-3': thirdConversationMessages,
