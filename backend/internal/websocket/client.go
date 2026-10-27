@@ -9,8 +9,8 @@ import (
 )
 
 const (
-	sendBufferSize  = 32
-	writeTimeout    = 5 * time.Second
+	sendBufferSize = 32
+	writeTimeout   = 5 * time.Second
 )
 
 type Client struct {

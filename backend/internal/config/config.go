@@ -11,16 +11,16 @@ import (
 const defaultJWTSecret = "dev-only-change-me"
 
 type Config struct {
-	AppEnv        string
-	HTTPAddr      string
-	DatabaseURL   string
-	CORSOrigin    string
-	JWTSecret     string
+	AppEnv         string
+	HTTPAddr       string
+	DatabaseURL    string
+	CORSOrigin     string
+	JWTSecret      string
 	AccessTokenTTL time.Duration
-	WSTicketTTL   time.Duration
-	CookieSecure  bool
+	WSTicketTTL    time.Duration
+	CookieSecure   bool
 	CookieSameSite string
-	CookieDomain  string
+	CookieDomain   string
 }
 
 func Load() Config {

@@ -2,8 +2,11 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import type { Conversation, Message, MessagePage } from '~/types'
 import { useApi } from '~/composables/useApi'
+import { useDemoMode } from '~/composables/useDemoMode'
+import { demoConversations, demoMessagesByConversation } from '~/utils/demo'
 
 export const useChatStore = defineStore('chat', () => {
+  const demoMode = useDemoMode()
   const conversations = ref<Conversation[]>([])
   const activeConversationId = ref<string | null>(null)
   const messages = ref<Record<string, Message[]>>({})
@@ -33,6 +36,16 @@ export const useChatStore = defineStore('chat', () => {
     loadingConversations.value = true
     errorMessage.value = null
 
+    if (demoMode.value) {
+      conversations.value = demoConversations.map((conversation) => ({
+        ...conversation,
+        peer: { ...conversation.peer },
+        lastMessage: conversation.lastMessage ? { ...conversation.lastMessage } : undefined,
+      }))
+      loadingConversations.value = false
+      return
+    }
+
     try {
       conversations.value = await useApi<Conversation[]>('/api/conversations')
     } catch {
@@ -51,6 +64,13 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   async function loadMessages(id: string, before?: string) {
+    if (demoMode.value) {
+      messages.value[id] = (demoMessagesByConversation[id] ?? []).map((message) => ({
+        ...message,
+      }))
+      return
+    }
+
     try {
       const page = await useApi<MessagePage>(`/api/conversations/${id}/messages`, {
         query: { before },
@@ -100,6 +120,27 @@ export const useChatStore = defineStore('chat', () => {
       : current.filter((id) => id !== userId)
   }
 
+  function updateConversationPreview(message: Message) {
+    const index = conversations.value.findIndex(
+      (conversation) => conversation.id === message.conversationId,
+    )
+
+    if (index === -1) {
+      return
+    }
+
+    const [conversation] = conversations.value.splice(index, 1)
+    if (!conversation) {
+      return
+    }
+
+    conversations.value.unshift({
+      ...conversation,
+      lastMessage: message,
+      updatedAt: message.createdAt,
+    })
+  }
+
   function clearError() {
     errorMessage.value = null
   }
@@ -120,6 +161,7 @@ export const useChatStore = defineStore('chat', () => {
     upsertMessage,
     confirmMessage,
     setTyping,
+    updateConversationPreview,
     clearError,
   }
 })

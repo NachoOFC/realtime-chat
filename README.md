@@ -83,10 +83,19 @@ realtime-chat/
    Copy-Item frontend/.env.example frontend/.env
    ```
 
-2. Levantar PostgreSQL:
+2. Levantar PostgreSQL y aplicar la migración.
+
+   Opción Docker:
 
    ```powershell
    docker compose up -d
+   Get-Content backend/migrations/0001_init.up.sql | docker compose exec -T postgres psql -U chat -d chat
+   ```
+
+   Opción PostgreSQL local (ajusta `DATABASE_URL` en `.env`):
+
+   ```powershell
+   psql $env:DATABASE_URL -f backend/migrations/0001_init.up.sql
    ```
 
 3. Backend:
@@ -116,6 +125,16 @@ realtime-chat/
 
    Adminer: `http://localhost:8081` (sistema `PostgreSQL`, servidor `postgres`).
 
+## Modo demo (sin login)
+
+Para ver la interfaz sin backend ni autenticación, activa:
+
+```env
+NUXT_PUBLIC_DEMO_MODE=true
+```
+
+En este modo el frontend usa un usuario falso y conversaciones de ejemplo. Los mensajes que escribas solo viven en pantalla: no hay WebSocket, base de datos ni tiempo real. Para volver al flujo real, cambia la variable a `false` o elimínala.
+
 ## Variables de entorno
 
 ### Backend (`.env` en la raíz)
@@ -128,6 +147,7 @@ realtime-chat/
 | `CORS_ORIGIN` | Origen permitido del frontend |
 | `JWT_SECRET` | Secreto de firma del JWT |
 | `ACCESS_TOKEN_TTL` | Duración de la sesión (`24h`) |
+| `WS_TICKET_TTL` | Vida del ticket de WebSocket (`30s`) |
 | `COOKIE_SECURE` | `true` en producción (HTTPS) |
 | `COOKIE_SAME_SITE` | `lax`, `strict` o `none` |
 | `COOKIE_DOMAIN` | Dominio de la cookie (opcional) |
@@ -138,6 +158,7 @@ realtime-chat/
 | --- | --- |
 | `NUXT_PUBLIC_API_BASE` | URL del backend (`http://localhost:8080`) |
 | `NUXT_PUBLIC_WS_BASE` | URL WebSocket (`ws://localhost:8080`) |
+| `NUXT_PUBLIC_DEMO_MODE` | `true` muestra la interfaz con datos falsos, sin login |
 
 ## API REST
 

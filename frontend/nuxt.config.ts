@@ -7,6 +7,7 @@ export default defineNuxtConfig({
     public: {
       apiBase: 'http://localhost:8080',
       wsBase: 'ws://localhost:8080',
+      demoMode: false,
     },
   },
   app: {

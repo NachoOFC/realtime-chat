@@ -3,6 +3,7 @@ export interface User {
   email?: string
   username: string
   avatarUrl?: string
+  isGuest?: boolean
   lastSeenAt?: string
   createdAt?: string
 }

@@ -10,11 +10,11 @@ import (
 )
 
 type Handler struct {
-	service      *Service
-	cookieDomain string
-	cookieSecure bool
+	service        *Service
+	cookieDomain   string
+	cookieSecure   bool
 	cookieSameSite http.SameSite
-	tokenTTL     time.Duration
+	tokenTTL       time.Duration
 }
 
 func NewHandler(service *Service, cookieDomain string, cookieSecure bool, cookieSameSite http.SameSite, tokenTTL time.Duration) *Handler {

@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { useAuthStore } from '~/stores/auth'
+import { useDemoMode } from '~/composables/useDemoMode'
 
 const auth = useAuthStore()
+const demoMode = useDemoMode()
 </script>
 
 <template>
@@ -13,8 +15,15 @@ const auth = useAuthStore()
         </NuxtLink>
 
         <div v-if="auth.user" class="flex items-center gap-3 text-sm">
+          <span
+            v-if="demoMode"
+            class="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800"
+          >
+            Modo demo
+          </span>
           <span class="hidden text-slate-600 sm:inline">{{ auth.user.username }}</span>
           <button
+            v-if="!demoMode"
             type="button"
             class="rounded-lg border border-slate-300 px-3 py-1.5 font-medium text-slate-700 transition hover:bg-slate-50"
             @click="auth.logout()"
