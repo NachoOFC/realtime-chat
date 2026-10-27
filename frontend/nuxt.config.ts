@@ -3,6 +3,7 @@ export default defineNuxtConfig({
   devtools: { enabled: false },
   modules: ['@pinia/nuxt', '@nuxtjs/tailwindcss'],
   css: ['~/assets/css/main.css'],
+  components: [{ path: '~/components', pathPrefix: false }],
   runtimeConfig: {
     public: {
       apiBase: 'http://localhost:8080',
