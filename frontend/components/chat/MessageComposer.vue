@@ -58,18 +58,18 @@ function submit() {
 </script>
 
 <template>
-  <form class="flex gap-2 border-t border-slate-200 p-3" @submit.prevent="submit">
+  <form class="flex gap-2 border-t border-slate-200 dark:border-slate-700 p-3" @submit.prevent="submit">
     <input
       v-model="content"
       type="text"
       maxlength="4000"
       autocomplete="off"
       placeholder="Escribe un mensaje"
-      class="min-w-0 flex-1 rounded-full border border-slate-300 px-4 py-2 text-sm outline-none focus:border-slate-500"
+      class="min-w-0 flex-1 rounded-full border border-slate-300 dark:border-slate-600 px-4 py-2 text-sm bg-white dark:bg-slate-900 outline-none focus:border-slate-500 dark:focus:border-sky-400"
     >
     <button
       type="submit"
-      class="rounded-full bg-slate-900 px-5 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
+      class="rounded-full bg-slate-900 dark:bg-sky-600 px-5 py-2 text-sm font-medium text-white transition hover:bg-slate-800 dark:hover:bg-sky-500"
     >
       Enviar
     </button>

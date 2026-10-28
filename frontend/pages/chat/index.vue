@@ -80,14 +80,14 @@ watch(
   <div class="flex flex-1 flex-col">
     <div
       v-if="chat.errorMessage"
-      class="mb-3 flex items-center justify-between rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800"
+      class="mb-3 flex items-center justify-between rounded-lg bg-amber-50 dark:bg-amber-950 px-3 py-2 text-sm text-amber-800 dark:text-amber-200"
     >
       <span>{{ chat.errorMessage }}</span>
       <button type="button" class="font-medium" @click="chat.clearError()">Cerrar</button>
     </div>
 
     <div
-      class="flex min-h-[32rem] flex-1 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
+      class="flex min-h-[32rem] flex-1 overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm"
     >
       <ChatList />
       <ChatWindow />

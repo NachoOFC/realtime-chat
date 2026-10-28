@@ -49,6 +49,7 @@ func NewRouter(deps Dependencies) http.Handler {
 	router.Get("/ws", deps.WebSocket.ServeWS)
 
 	router.Route("/api", func(router chi.Router) {
+		router.Post("/auth/guest", deps.Users.Guest)
 		router.Post("/auth/register", deps.Users.Register)
 		router.Post("/auth/login", deps.Users.Login)
 		router.Post("/auth/logout", deps.Users.Logout)

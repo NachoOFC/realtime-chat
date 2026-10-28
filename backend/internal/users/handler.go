@@ -43,6 +43,22 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	httputil.WriteJSON(w, http.StatusCreated, user)
 }
 
+func (h *Handler) Guest(w http.ResponseWriter, r *http.Request) {
+	var input GuestInput
+	if !httputil.ReadJSON(w, r, &input) {
+		return
+	}
+
+	user, token, err := h.service.GuestLogin(r.Context(), input.Username)
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+
+	auth.SetSessionCookie(w, token, h.cookieDomain, h.cookieSecure, h.cookieSameSite, h.tokenTTL)
+	httputil.WriteJSON(w, http.StatusCreated, user)
+}
+
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	var input LoginInput
 	if !httputil.ReadJSON(w, r, &input) {
@@ -98,6 +114,8 @@ func writeServiceError(w http.ResponseWriter, err error) {
 		httputil.Error(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, ErrInvalidCredentials):
 		httputil.Error(w, http.StatusUnauthorized, err.Error())
+	case errors.Is(err, ErrUsernameTaken):
+		httputil.Error(w, http.StatusConflict, err.Error())
 	case errors.Is(err, ErrNotFound):
 		httputil.Error(w, http.StatusNotFound, err.Error())
 	case errors.Is(err, ErrNotImplemented):

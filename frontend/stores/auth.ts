@@ -32,28 +32,13 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  async function login(email: string, password: string) {
+  async function enterAsGuest(username: string) {
     loading.value = true
 
     try {
-      user.value = await useApi<User>('/api/auth/login', {
+      user.value = await useApi<User>('/api/auth/guest', {
         method: 'POST',
-        body: { email, password },
-      })
-      initialized.value = true
-      return user.value
-    } finally {
-      loading.value = false
-    }
-  }
-
-  async function register(email: string, username: string, password: string) {
-    loading.value = true
-
-    try {
-      user.value = await useApi<User>('/api/auth/register', {
-        method: 'POST',
-        body: { email, username, password },
+        body: { username },
       })
       initialized.value = true
       return user.value
@@ -83,8 +68,7 @@ export const useAuthStore = defineStore('auth', () => {
     initialized,
     isAuthenticated,
     ensureSession,
-    login,
-    register,
+    enterAsGuest,
     logout,
   }
 })

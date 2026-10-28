@@ -28,29 +28,29 @@ watch(() => chat.activeMessages.length, scrollToBottom)
     v-if="chat.activeConversation"
     class="flex min-w-0 flex-1 flex-col"
   >
-    <header class="flex items-center gap-3 border-b border-slate-200 px-4 py-3">
+    <header class="flex items-center gap-3 border-b border-slate-200 dark:border-slate-700 px-4 py-3">
       <button
         type="button"
-        class="rounded-lg border border-slate-300 px-2 py-1 text-sm text-slate-600 md:hidden"
+        class="rounded-lg border border-slate-300 dark:border-slate-600 px-2 py-1 text-sm text-slate-600 dark:text-slate-300 md:hidden"
         @click="chat.activeConversationId = null"
       >
         Volver
       </button>
 
       <span
-        class="flex size-9 items-center justify-center rounded-full bg-slate-200 text-sm font-semibold text-slate-700"
+        class="flex size-9 items-center justify-center rounded-full bg-slate-200 dark:bg-slate-700 text-sm font-semibold text-slate-700 dark:text-slate-200"
       >
         {{ chat.activeConversation.peer.username.slice(0, 1).toUpperCase() }}
       </span>
 
       <div>
         <p class="font-medium">{{ chat.activeConversation.peer.username }}</p>
-        <p class="text-xs text-slate-500">Chat 1:1</p>
+        <p class="text-xs text-slate-500 dark:text-slate-400">Chat 1:1</p>
       </div>
     </header>
 
-    <div ref="scroller" class="flex-1 space-y-2 overflow-y-auto bg-white px-4 py-4">
-      <p v-if="!chat.activeMessages.length" class="py-10 text-center text-sm text-slate-500">
+    <div ref="scroller" class="flex-1 space-y-2 overflow-y-auto bg-white dark:bg-slate-900 px-4 py-4">
+      <p v-if="!chat.activeMessages.length" class="py-10 text-center text-sm text-slate-500 dark:text-slate-400">
         Todavía no hay mensajes en esta conversación.
       </p>
 
@@ -67,7 +67,7 @@ watch(() => chat.activeMessages.length, scrollToBottom)
     <MessageComposer :conversation-id="chat.activeConversation.id" />
   </section>
 
-  <section v-else class="flex flex-1 items-center justify-center bg-white max-md:hidden">
-    <p class="text-sm text-slate-500">Selecciona una conversación para empezar.</p>
+  <section v-else class="flex flex-1 items-center justify-center bg-white dark:bg-slate-900 max-md:hidden">
+    <p class="text-sm text-slate-500 dark:text-slate-400">Selecciona una conversación para empezar.</p>
   </section>
 </template>

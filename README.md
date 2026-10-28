@@ -12,7 +12,7 @@ Chat 1:1 en tiempo real estilo WhatsApp. Este repositorio contiene la **estructu
 | Base de datos | PostgreSQL 16 + pgx |
 | Deploy | Render |
 
-No se usa Next.js ni React. La autenticación se basa en **cookies HttpOnly**, nunca en `localStorage`.
+No se usa Next.js ni React. Los usuarios entran con un **apodo**, sin correo ni contraseña, y la sesión se guarda en una **cookie HttpOnly** (nunca en `localStorage`).
 
 ## Estructura
 
@@ -89,13 +89,17 @@ realtime-chat/
 
    ```powershell
    docker compose up -d
-   Get-Content backend/migrations/0001_init.up.sql | docker compose exec -T postgres psql -U chat -d chat
+   Get-ChildItem backend/migrations/*.up.sql | Sort-Object Name | ForEach-Object {
+     Get-Content $_ | docker compose exec -T postgres psql -U chat -d chat
+   }
    ```
 
    Opción PostgreSQL local (ajusta `DATABASE_URL` en `.env`):
 
    ```powershell
-   psql $env:DATABASE_URL -f backend/migrations/0001_init.up.sql
+   Get-ChildItem backend/migrations/*.up.sql | Sort-Object Name | ForEach-Object {
+     psql $env:DATABASE_URL -f $_
+   }
    ```
 
 3. Backend:
@@ -165,6 +169,7 @@ En este modo el frontend usa un usuario falso y conversaciones de ejemplo. Los m
 | Método | Ruta | Estado |
 | --- | --- | --- |
 | `GET` | `/healthz` | Listo |
+| `POST` | `/api/auth/guest` | Listo (apodo, sin correo ni contraseña) |
 | `POST` | `/api/auth/register` | Estructura (repositorio pendiente) |
 | `POST` | `/api/auth/login` | Estructura (repositorio pendiente) |
 | `POST` | `/api/auth/logout` | Listo |
