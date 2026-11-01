@@ -12,6 +12,13 @@ useHead(() => ({
     style: { 'color-scheme': isDark.value ? 'dark' : 'light' },
   },
 }))
+
+onMounted(() => {
+  watchEffect(() => {
+    document.documentElement.classList.toggle('dark', isDark.value)
+    document.documentElement.style.colorScheme = isDark.value ? 'dark' : 'light'
+  })
+})
 </script>
 
 <template>
