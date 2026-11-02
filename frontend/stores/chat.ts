@@ -2,25 +2,14 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import type { Conversation, Message, MessagePage } from '~/types'
 import { useApi } from '~/composables/useApi'
-import { useDemoMode } from '~/composables/useDemoMode'
-import {
-  demoBot,
-  demoBotConversationId,
-  demoConversations,
-  demoMessagesByConversation,
-} from '~/utils/demo'
-import { getBotReply } from '~/utils/bot'
 
 export const useChatStore = defineStore('chat', () => {
-  const demoMode = useDemoMode()
   const conversations = ref<Conversation[]>([])
   const activeConversationId = ref<string | null>(null)
   const messages = ref<Record<string, Message[]>>({})
   const typingByConversation = ref<Record<string, string[]>>({})
   const loadingConversations = ref(false)
   const errorMessage = ref<string | null>(null)
-
-  let botReplyTimer: ReturnType<typeof setTimeout> | null = null
 
   const activeConversation = computed(
     () => conversations.value.find((item) => item.id === activeConversationId.value) ?? null,
@@ -44,16 +33,6 @@ export const useChatStore = defineStore('chat', () => {
     loadingConversations.value = true
     errorMessage.value = null
 
-    if (demoMode.value) {
-      conversations.value = demoConversations.map((conversation) => ({
-        ...conversation,
-        peer: { ...conversation.peer },
-        lastMessage: conversation.lastMessage ? { ...conversation.lastMessage } : undefined,
-      }))
-      loadingConversations.value = false
-      return
-    }
-
     try {
       conversations.value = await useApi<Conversation[]>('/api/conversations')
     } catch {
@@ -72,13 +51,6 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   async function loadMessages(id: string, before?: string) {
-    if (demoMode.value) {
-      messages.value[id] = (demoMessagesByConversation[id] ?? []).map((message) => ({
-        ...message,
-      }))
-      return
-    }
-
     try {
       const page = await useApi<MessagePage>(`/api/conversations/${id}/messages`, {
         query: { before },
@@ -149,35 +121,6 @@ export const useChatStore = defineStore('chat', () => {
     })
   }
 
-  function simulateBotReply(conversationId: string, userMessage: string) {
-    if (!demoMode.value || conversationId !== demoBotConversationId) {
-      return
-    }
-
-    if (botReplyTimer) {
-      clearTimeout(botReplyTimer)
-    }
-
-    setTyping(conversationId, demoBot.id, true)
-
-    botReplyTimer = setTimeout(() => {
-      botReplyTimer = null
-      setTyping(conversationId, demoBot.id, false)
-
-      const reply: Message = {
-        id: crypto.randomUUID(),
-        conversationId,
-        senderId: demoBot.id,
-        content: getBotReply(userMessage),
-        createdAt: new Date().toISOString(),
-        status: 'sent',
-      }
-
-      upsertMessage(reply)
-      updateConversationPreview(reply)
-    }, 900)
-  }
-
   function clearError() {
     errorMessage.value = null
   }
@@ -199,7 +142,6 @@ export const useChatStore = defineStore('chat', () => {
     confirmMessage,
     setTyping,
     updateConversationPreview,
-    simulateBotReply,
     clearError,
   }
 })

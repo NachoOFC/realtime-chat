@@ -49,7 +49,7 @@ function readError(error: unknown) {
             maxlength="20"
             autofocus
             required
-            placeholder="Ej: lucas_99"
+            placeholder="Ej: Juanito"
             class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 bg-white dark:bg-slate-900 outline-none focus:border-slate-500 dark:focus:border-sky-400"
           >
         </div>

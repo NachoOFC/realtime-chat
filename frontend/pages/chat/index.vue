@@ -2,23 +2,14 @@
 import { onBeforeUnmount, onMounted, watch } from 'vue'
 import { useChatStore } from '~/stores/chat'
 import { useChatSocket } from '~/composables/useChatSocket'
-import { useDemoMode } from '~/composables/useDemoMode'
 
 const chat = useChatStore()
 const socket = useChatSocket()
-const demoMode = useDemoMode()
 
 let stopListening: (() => void) | undefined
 
 onMounted(async () => {
   await chat.loadConversations()
-
-  if (demoMode.value) {
-    if (!chat.activeConversationId && chat.conversations[0]) {
-      await chat.selectConversation(chat.conversations[0].id)
-    }
-    return
-  }
 
   stopListening = socket.onEvent((event) => {
     switch (event.type) {
@@ -44,15 +35,13 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   stopListening?.()
-  if (!demoMode.value) {
-    socket.disconnect()
-  }
+  socket.disconnect()
 })
 
 watch(
   () => chat.activeConversationId,
   (conversationId, previousConversationId) => {
-    if (demoMode.value || socket.status.value !== 'open') {
+    if (socket.status.value !== 'open') {
       return
     }
 
@@ -69,7 +58,7 @@ watch(
 watch(
   () => socket.status.value,
   (status) => {
-    if (!demoMode.value && status === 'open' && chat.activeConversationId) {
+    if (status === 'open' && chat.activeConversationId) {
       socket.send({ type: 'conversation.join', conversationId: chat.activeConversationId })
     }
   },

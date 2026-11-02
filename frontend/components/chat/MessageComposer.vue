@@ -3,7 +3,6 @@ import type { Message } from '~/types'
 import { useAuthStore } from '~/stores/auth'
 import { useChatStore } from '~/stores/chat'
 import { useChatSocket } from '~/composables/useChatSocket'
-import { useDemoMode } from '~/composables/useDemoMode'
 
 const props = defineProps<{
   conversationId: string
@@ -12,7 +11,6 @@ const props = defineProps<{
 const auth = useAuthStore()
 const chat = useChatStore()
 const socket = useChatSocket()
-const demoMode = useDemoMode()
 
 const content = ref('')
 
@@ -32,17 +30,11 @@ function submit() {
     content: text,
     clientMessageId,
     createdAt: new Date().toISOString(),
-    status: demoMode.value ? 'sent' : 'sending',
+    status: 'sending',
   }
 
   chat.upsertMessage(optimistic)
   content.value = ''
-
-  if (demoMode.value) {
-    chat.updateConversationPreview(optimistic)
-    chat.simulateBotReply(props.conversationId, text)
-    return
-  }
 
   const sent = socket.send({
     type: 'message.send',

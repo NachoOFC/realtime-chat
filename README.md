@@ -129,15 +129,9 @@ realtime-chat/
 
    Adminer: `http://localhost:8081` (sistema `PostgreSQL`, servidor `postgres`).
 
-## Modo demo (sin login)
+## Acceso con apodo
 
-Para ver la interfaz sin backend ni autenticación, activa:
-
-```env
-NUXT_PUBLIC_DEMO_MODE=true
-```
-
-En este modo el frontend usa un usuario falso y conversaciones de ejemplo. Los mensajes que escribas solo viven en pantalla: no hay WebSocket, base de datos ni tiempo real. Para volver al flujo real, cambia la variable a `false` o elimínala.
+La app muestra el formulario de apodo en /login cuando no hay una sesión activa. Para entrar necesitas el backend encendido y PostgreSQL configurado con las migraciones aplicadas. El apodo se registra mediante POST /api/auth/guest y la sesión se guarda en una cookie HttpOnly.
 
 ## Variables de entorno
 
@@ -162,7 +156,6 @@ En este modo el frontend usa un usuario falso y conversaciones de ejemplo. Los m
 | --- | --- |
 | `NUXT_PUBLIC_API_BASE` | URL del backend (`http://localhost:8080`) |
 | `NUXT_PUBLIC_WS_BASE` | URL WebSocket (`ws://localhost:8080`) |
-| `NUXT_PUBLIC_DEMO_MODE` | `true` muestra la interfaz con datos falsos, sin login |
 
 ## API REST
 

@@ -2,11 +2,8 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import type { User } from '~/types'
 import { useApi } from '~/composables/useApi'
-import { useDemoMode } from '~/composables/useDemoMode'
-import { demoUser } from '~/utils/demo'
 
 export const useAuthStore = defineStore('auth', () => {
-  const demoMode = useDemoMode()
   const user = ref<User | null>(null)
   const loading = ref(false)
   const initialized = ref(false)
@@ -19,11 +16,6 @@ export const useAuthStore = defineStore('auth', () => {
     }
 
     initialized.value = true
-
-    if (demoMode.value) {
-      user.value = { ...demoUser }
-      return
-    }
 
     try {
       user.value = await useApi<User>('/api/me')
@@ -48,11 +40,6 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function logout() {
-    if (demoMode.value) {
-      user.value = { ...demoUser }
-      return
-    }
-
     try {
       await useApi('/api/auth/logout', { method: 'POST' })
     } finally {
