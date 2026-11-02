@@ -25,14 +25,14 @@ function readError(error: unknown) {
     }
   }
 
-  return 'No se pudo entrar. Probá de nuevo.'
+  return 'No se pudo entrar. Intenta de nuevo.'
 }
 </script>
 
 <template>
   <section class="mx-auto flex w-full max-w-md flex-1 flex-col justify-center py-10">
     <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 shadow-sm">
-      <h1 class="text-2xl font-semibold tracking-tight">Elegí tu apodo</h1>
+      <h1 class="text-2xl font-semibold tracking-tight">Elige tu apodo</h1>
       <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
         Sin correo ni contraseña. Tu sesión queda guardada en este navegador.
       </p>
@@ -68,7 +68,7 @@ function readError(error: unknown) {
       </form>
 
       <p class="mt-4 text-xs text-slate-400 dark:text-slate-400">
-        Si cerrás la sesión o cambiás de navegador, vas a necesitar otro apodo.
+        Si cierras la sesión o cambias de navegador, necesitarás otro apodo.
       </p>
     </div>
   </section>
