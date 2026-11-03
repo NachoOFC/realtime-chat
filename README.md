@@ -1,6 +1,6 @@
 # Realtime Chat
 
-Chat 1:1 en tiempo real estilo WhatsApp. Este repositorio contiene la **estructura inicial** del proyecto: frontend, backend, base de datos y configuración local listos para empezar a implementar la lógica.
+Chat 1:1 en tiempo real estilo WhatsApp. Incluye acceso con apodo, conversaciones privadas, persistencia en PostgreSQL, WebSockets y soporte HTTPS/WSS.
 
 ## Stack
 
@@ -65,14 +65,14 @@ realtime-chat/
 - CORS con credenciales limitado a `CORS_ORIGIN`.
 - Contraseñas con bcrypt.
 - Límite de tamaño de mensajes de WebSocket y de cuerpos JSON.
-- Los mensajes se persisten en PostgreSQL antes de emitirse (cuando se implemente el repositorio).
+- Los mensajes se guardan en PostgreSQL antes de emitirse por WebSocket. HTTPS/WSS cifran la conexión; el contenido no tiene cifrado de extremo a extremo.
 
 ## Requisitos
 
 - Go 1.24+
 - Node.js 20+
 - pnpm 9+
-- Docker
+- PostgreSQL local o una base remota como Neon. Docker es opcional.
 
 ## Puesta en marcha
 
@@ -94,7 +94,7 @@ realtime-chat/
    }
    ```
 
-   Opción PostgreSQL local (ajusta `DATABASE_URL` en `.env`):
+   Opción sin Docker: PostgreSQL local o Neon (ajusta `DATABASE_URL` en `.env`). Para usar los comandos siguientes, instala `psql` y define también `$env:DATABASE_URL` en esta terminal con la misma conexión; PowerShell no carga `.env` automáticamente:
 
    ```powershell
    Get-ChildItem backend/migrations/*.up.sql | Sort-Object Name | ForEach-Object {
@@ -129,9 +129,48 @@ realtime-chat/
 
    Adminer: `http://localhost:8081` (sistema `PostgreSQL`, servidor `postgres`).
 
+## Backend con PM2 (sin Docker)
+
+PM2 se instala como dependencia del proyecto con `pnpm install`; no necesitas instalarlo globalmente. Los comandos siguientes se ejecutan desde la raíz del repositorio.
+
+Antes de iniciar, configura `DATABASE_URL` en el `.env` de la raíz y aplica las migraciones a tu PostgreSQL local o remoto. El backend necesita la base de datos para arrancar. Docker queda como alternativa opcional.
+
+```powershell
+pnpm install
+pnpm backend:start
+pnpm backend:status
+pnpm backend:logs
+```
+
+`backend:start` compila Go en `backend/bin/` y ejecuta ese binario con la configuración de `ecosystem.config.cjs`. PM2 inicia una sola instancia, reinicia el proceso si termina y espera 3 segundos entre intentos. Tras 10 reinicios inestables se detiene para evitar un bucle cuando hay una configuración incorrecta o no está disponible PostgreSQL. Revisa los logs, corrige la causa y ejecuta `pnpm backend:restart`.
+
+Para detenerlo o reiniciarlo después de cambiar `.env`:
+
+```powershell
+pnpm backend:stop
+pnpm backend:restart
+```
+
+Para actualizar el código, detén el backend antes de recompilar (Windows bloquea el ejecutable mientras está en uso):
+
+```powershell
+pnpm backend:stop
+pnpm backend:build
+pnpm backend:restart
+```
+
+Comprueba la API en `http://localhost:8080/healthz`. PM2 mantiene el backend en segundo plano cuando cierras la terminal, pero esta configuración no lo inicia automáticamente al reiniciar Windows. Tampoco detecta por sí sola una API bloqueada que mantiene el proceso abierto.
+
 ## Acceso con apodo
 
 La app muestra el formulario de apodo en /login cuando no hay una sesión activa. Para entrar necesitas el backend encendido y PostgreSQL configurado con las migraciones aplicadas. El apodo se registra mediante POST /api/auth/guest y la sesión se guarda en una cookie HttpOnly.
+
+## Chat y TLS
+
+Entra con un apodo y selecciona **Nuevo chat** para buscar otro usuario. Para probar dos sesiones, abre una ventana de incógnito con otro apodo. El chat guarda los mensajes, recupera el historial por páginas, confirma lecturas e indica quién está escribiendo.
+
+- [Configurar HTTPS/WSS local y en producción](docs/tls.md)
+- [Ejemplo de lo que guarda cada tabla](docs/datos-ejemplo.md)
 
 ## Variables de entorno
 
@@ -163,14 +202,14 @@ La app muestra el formulario de apodo en /login cuando no hay una sesión activa
 | --- | --- | --- |
 | `GET` | `/healthz` | Listo |
 | `POST` | `/api/auth/guest` | Listo (apodo, sin correo ni contraseña) |
-| `POST` | `/api/auth/register` | Estructura (repositorio pendiente) |
-| `POST` | `/api/auth/login` | Estructura (repositorio pendiente) |
+| `POST` | `/api/auth/register` | Disponible en API; la interfaz usa apodo |
+| `POST` | `/api/auth/login` | Disponible en API; la interfaz usa apodo |
 | `POST` | `/api/auth/logout` | Listo |
-| `GET` | `/api/me` | Estructura (repositorio pendiente) |
-| `GET` | `/api/users` | Estructura (repositorio pendiente) |
-| `GET` | `/api/conversations` | Estructura (repositorio pendiente) |
-| `POST` | `/api/conversations` | Estructura (repositorio pendiente) |
-| `GET` | `/api/conversations/{id}/messages` | Estructura (repositorio pendiente) |
+| `GET` | `/api/me` | Listo |
+| `GET` | `/api/users` | Listo |
+| `GET` | `/api/conversations` | Listo |
+| `POST` | `/api/conversations` | Listo |
+| `GET` | `/api/conversations/{id}/messages` | Listo, con paginación |
 | `POST` | `/api/ws/ticket` | Listo |
 | `GET` | `/ws?ticket=...` | Listo (conexión y presencia) |
 
@@ -197,16 +236,16 @@ Servidor → cliente:
 - Base de datos con migraciones iniciales.
 - Autenticación JWT + cookies y tickets de WebSocket implementados.
 - Hub de WebSocket con presencia y enrutamiento por conversación.
-- Repositorios de `users` y `chat` son stubs que devuelven `ErrNotImplemented`.
-- UI estilo WhatsApp con datos de ejemplo vacíos; falta conectar la lógica real.
+- Repositorios PostgreSQL de usuarios y chat implementados, con control de participantes, idempotencia y lecturas persistentes.
+- Interfaz conectada al backend con selección de usuarios, historial, indicadores de escritura, presencia y temas claro/oscuro.
 
 ## Próximos pasos
 
-1. Implementar `users.Repository` y `chat.Repository` con pgx.
+1. Ampliar búsqueda de usuarios y paginación de conversaciones.
 2. Aplicar migraciones al arrancar o con una herramienta (`golang-migrate`).
-3. Persistir y emitir mensajes desde `message.send`.
-4. Marcar mensajes como leídos y calcular no leídos.
-5. Tests de integración del hub y de la API.
+3. Reintentar mensajes pendientes después de recuperar la conexión.
+4. Agregar archivos adjuntos.
+5. Ejecutar las pruebas de integración en CI.
 6. Redis Pub/Sub si se despliegan varias instancias.
 
 ## Deploy en Render

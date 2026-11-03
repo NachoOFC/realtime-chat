@@ -1,5 +1,16 @@
 {
   "name": "realtime-chat",
   "private": true,
-  "packageManager": "pnpm@12.14.0"
+  "scripts": {
+    "backend:build": "node scripts/build-backend.cjs",
+    "backend:start": "pnpm backend:build && pm2 start ecosystem.config.cjs",
+    "backend:restart": "pm2 restart realtime-chat-backend --update-env",
+    "backend:stop": "pm2 stop realtime-chat-backend",
+    "backend:logs": "pm2 logs realtime-chat-backend",
+    "backend:status": "pm2 describe realtime-chat-backend"
+  },
+  "packageManager": "pnpm@12.14.0",
+  "devDependencies": {
+    "pm2": "^7.1.1"
+  }
 }

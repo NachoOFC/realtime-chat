@@ -36,3 +36,6 @@ logs/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Certificados locales (incluyen una clave privada)
+.certs/

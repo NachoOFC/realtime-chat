@@ -18,6 +18,7 @@ type Conversation struct {
 }
 
 type Message struct {
+	Status          string    `json:"status,omitempty"`
 	ID              string    `json:"id"`
 	ConversationID  string    `json:"conversationId"`
 	SenderID        string    `json:"senderId"`

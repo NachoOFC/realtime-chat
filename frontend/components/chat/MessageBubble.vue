@@ -22,7 +22,7 @@ const time = computed(() =>
     >
       <p class="whitespace-pre-wrap break-words">{{ message.content }}</p>
       <p class="mt-1 text-right text-[10px]" :class="own ? 'text-slate-300' : 'text-slate-500 dark:text-slate-400'">
-        {{ message.status === 'sending' ? 'enviando...' : time }}
+        {{ message.status === 'sending' ? 'enviando...' : time }}{{ own && message.status === 'read' ? ' · Leído' : '' }}
       </p>
     </div>
   </div>

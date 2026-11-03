@@ -1,6 +1,14 @@
+import { fileURLToPath } from 'node:url'
+
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
   devtools: { enabled: false },
+  devServer: {
+    https: process.env.NUXT_DEV_TLS === 'true' ? {
+      cert: fileURLToPath(new URL('../.certs/localhost.crt', import.meta.url)),
+      key: fileURLToPath(new URL('../.certs/localhost.key', import.meta.url)),
+    } : false,
+  },
   modules: ['@pinia/nuxt', '@nuxtjs/tailwindcss'],
   tailwindcss: {
     cssPath: '~/assets/css/main.css',

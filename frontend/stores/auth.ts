@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import type { User } from '~/types'
+import { useChatStore } from '~/stores/chat'
 import { useApi } from '~/composables/useApi'
 
 export const useAuthStore = defineStore('auth', () => {
@@ -45,6 +46,7 @@ export const useAuthStore = defineStore('auth', () => {
     } finally {
       user.value = null
       initialized.value = true
+      useChatStore().reset()
       await navigateTo('/login')
     }
   }

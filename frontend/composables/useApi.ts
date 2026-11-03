@@ -14,6 +14,6 @@ export function useApi<T>(path: string, options: ApiOptions = {}): Promise<T> {
     method: options.method,
     body: options.body,
     query: options.query,
-    headers: options.headers,
+    headers: { ...(import.meta.server ? useRequestHeaders(['cookie']) : {}), ...options.headers },
   })
 }

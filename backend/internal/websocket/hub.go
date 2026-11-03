@@ -142,3 +142,13 @@ func (h *Hub) IsOnline(userID string) bool {
 func boolPtr(value bool) *bool {
 	return &value
 }
+
+func (h *Hub) OnlineUserIDs() []string {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	result := make([]string, 0, len(h.users))
+	for id := range h.users {
+		result = append(result, id)
+	}
+	return result
+}

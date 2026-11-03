@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useAuthStore } from '~/stores/auth'
 import { useChatStore } from '~/stores/chat'
+const loadingEarlier = ref(false)
 
 const chat = useChatStore()
 const auth = useAuthStore()
@@ -20,7 +21,20 @@ async function scrollToBottom() {
 }
 
 watch(() => chat.activeConversationId, scrollToBottom)
-watch(() => chat.activeMessages.length, scrollToBottom)
+watch(() => chat.activeMessages.length, () => { if (!loadingEarlier.value) void scrollToBottom() })
+async function loadEarlier() {
+  const id = chat.activeConversationId
+  const cursor = id ? chat.nextCursors[id] : undefined
+  if (!id || !cursor || loadingEarlier.value) return
+  loadingEarlier.value = true
+  const element = scroller.value
+  const previousHeight = element?.scrollHeight ?? 0
+  try {
+    await chat.loadMessages(id, cursor)
+    await nextTick()
+    if (element) element.scrollTop += element.scrollHeight - previousHeight
+  } finally { loadingEarlier.value = false }
+}
 </script>
 
 <template>
@@ -50,6 +64,7 @@ watch(() => chat.activeMessages.length, scrollToBottom)
     </header>
 
     <div ref="scroller" class="flex-1 space-y-2 overflow-y-auto bg-white dark:bg-slate-900 px-4 py-4">
+      <button v-if="chat.nextCursors[chat.activeConversation.id]" type="button" :disabled="loadingEarlier" class="mx-auto block rounded-lg border border-slate-300 px-3 py-1 text-xs dark:border-slate-600" @click="loadEarlier">{{ loadingEarlier ? 'Cargando...' : 'Ver mensajes anteriores' }}</button>
       <p v-if="!chat.activeMessages.length" class="py-10 text-center text-sm text-slate-500 dark:text-slate-400">
         Todavía no hay mensajes en esta conversación.
       </p>
@@ -64,7 +79,7 @@ watch(() => chat.activeMessages.length, scrollToBottom)
 
     <TypingIndicator :active="peerTyping" />
 
-    <MessageComposer :conversation-id="chat.activeConversation.id" />
+    <MessageComposer :key="chat.activeConversation.id" :conversation-id="chat.activeConversation.id" />
   </section>
 
   <section v-else class="flex flex-1 items-center justify-center bg-white dark:bg-slate-900 max-md:hidden">

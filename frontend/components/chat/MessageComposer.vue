@@ -13,6 +13,18 @@ const chat = useChatStore()
 const socket = useChatSocket()
 
 const content = ref('')
+let typingTimer: ReturnType<typeof setTimeout> | undefined
+function stopTyping() {
+  clearTimeout(typingTimer)
+  socket.send({ type: 'typing', conversationId: props.conversationId, active: false })
+}
+function announceTyping() {
+  socket.send({ type: 'typing', conversationId: props.conversationId, active: !!content.value.trim() })
+  clearTimeout(typingTimer)
+  typingTimer = setTimeout(stopTyping, 1200)
+}
+onBeforeUnmount(stopTyping)
+watch(() => props.conversationId, () => { clearTimeout(typingTimer); content.value = '' })
 
 function submit() {
   const text = content.value.trim()
@@ -33,6 +45,7 @@ function submit() {
     status: 'sending',
   }
 
+  stopTyping()
   chat.upsertMessage(optimistic)
   content.value = ''
 
@@ -53,6 +66,8 @@ function submit() {
   <form class="flex gap-2 border-t border-slate-200 dark:border-slate-700 p-3" @submit.prevent="submit">
     <input
       v-model="content"
+      @input="announceTyping"
+      @blur="stopTyping"
       type="text"
       maxlength="4000"
       autocomplete="off"

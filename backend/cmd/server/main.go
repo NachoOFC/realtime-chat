@@ -68,23 +68,36 @@ func main() {
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
 		Handler:           router,
+		TLSConfig:         cfg.TLSConfig(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
+	serverErrors := make(chan error, 1)
 	go func() {
-		slog.Info("servidor escuchando", "addr", cfg.HTTPAddr)
-		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			slog.Error("servidor detenido", "error", err)
-			stop()
+		if cfg.TLSCertFile != "" {
+			slog.Info("servidor HTTPS escuchando", "addr", cfg.HTTPAddr)
+			serverErrors <- server.ListenAndServeTLS(cfg.TLSCertFile, cfg.TLSKeyFile)
+		} else {
+			slog.Info("servidor HTTP escuchando", "addr", cfg.HTTPAddr)
+			serverErrors <- server.ListenAndServe()
 		}
 	}()
-
-	<-ctx.Done()
-
+	var serveError error
+	select {
+	case <-ctx.Done():
+	case serveError = <-serverErrors:
+		if !errors.Is(serveError, http.ErrServerClosed) {
+			slog.Error("servidor detenido", "error", serveError)
+		}
+	}
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	if err := server.Shutdown(shutdownCtx); err != nil {
 		slog.Error("apagado forzado", "error", err)
+	}
+
+	if serveError != nil && !errors.Is(serveError, http.ErrServerClosed) {
+		os.Exit(1)
 	}
 }

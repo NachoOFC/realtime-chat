@@ -1,6 +1,7 @@
 package config
 
 import (
+	"crypto/tls"
 	"errors"
 	"os"
 	"strconv"
@@ -11,6 +12,8 @@ import (
 const defaultJWTSecret = "dev-only-change-me"
 
 type Config struct {
+	TLSCertFile    string
+	TLSKeyFile     string
 	AppEnv         string
 	HTTPAddr       string
 	DatabaseURL    string
@@ -25,6 +28,8 @@ type Config struct {
 
 func Load() Config {
 	return Config{
+		TLSCertFile:    os.Getenv("TLS_CERT_FILE"),
+		TLSKeyFile:     os.Getenv("TLS_KEY_FILE"),
 		AppEnv:         getenv("APP_ENV", "development"),
 		HTTPAddr:       getenv("HTTP_ADDR", ":8080"),
 		DatabaseURL:    getenv("DATABASE_URL", "postgres://chat:chat@localhost:5432/chat?sslmode=disable"),
@@ -39,6 +44,17 @@ func Load() Config {
 }
 
 func (c Config) Validate() error {
+	if (c.TLSCertFile == "") != (c.TLSKeyFile == "") {
+		return errors.New("TLS_CERT_FILE y TLS_KEY_FILE deben configurarse juntos")
+	}
+	if c.TLSCertFile != "" {
+		if _, err := tls.LoadX509KeyPair(c.TLSCertFile, c.TLSKeyFile); err != nil {
+			return errors.New("no se pudo cargar el certificado o la clave TLS")
+		}
+		if !c.CookieSecure {
+			return errors.New("TLS requiere COOKIE_SECURE=true")
+		}
+	}
 	if c.JWTSecret == "" {
 		return errors.New("JWT_SECRET es obligatorio")
 	}
@@ -86,3 +102,5 @@ func getduration(key string, fallback time.Duration) time.Duration {
 	}
 	return parsed
 }
+
+func (c Config) TLSConfig() *tls.Config { return &tls.Config{MinVersion: tls.VersionTLS12} }

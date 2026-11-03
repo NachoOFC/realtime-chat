@@ -4,7 +4,7 @@
   "type": "module",
   "packageManager": "pnpm@12.14.0",
   "scripts": {
-    "dev": "nuxt dev",
+    "dev": "node ../scripts/dev-frontend.cjs",
     "build": "nuxt build",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
