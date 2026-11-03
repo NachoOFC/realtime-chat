@@ -40,15 +40,15 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  function clearSession() {
+    user.value = null
+    initialized.value = true
+    useChatStore().reset()
+  }
   async function logout() {
-    try {
-      await useApi('/api/auth/logout', { method: 'POST' })
-    } finally {
-      user.value = null
-      initialized.value = true
-      useChatStore().reset()
-      await navigateTo('/login')
-    }
+    await useApi('/api/auth/logout', { method: 'POST' })
+    clearSession()
+    await navigateTo('/login')
   }
 
   return {
@@ -59,5 +59,6 @@ export const useAuthStore = defineStore('auth', () => {
     ensureSession,
     enterAsGuest,
     logout,
+    clearSession,
   }
 })

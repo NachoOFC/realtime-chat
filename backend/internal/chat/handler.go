@@ -82,6 +82,8 @@ func writeError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrValidation):
 		httputil.Error(w, http.StatusBadRequest, err.Error())
+	case errors.Is(err, ErrClosed):
+		httputil.Error(w, http.StatusGone, err.Error())
 	case errors.Is(err, ErrConflict):
 		httputil.Error(w, http.StatusConflict, err.Error())
 	case errors.Is(err, ErrForbidden):

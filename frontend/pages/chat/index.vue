@@ -17,6 +17,26 @@ function markVisibleRead() {
 onMounted(async () => {
   stopListening = socket.onEvent(event => {
     switch (event.type) {
+      case 'auth.expired':
+        socket.disconnect()
+        auth.clearSession()
+        void navigateTo('/login')
+        break
+      case 'user.removed':
+        if (event.userId === auth.user?.id) {
+          socket.disconnect()
+          auth.clearSession()
+          void navigateTo('/login')
+        } else {
+          chat.users = chat.users.filter(user => user.id !== event.userId)
+          delete chat.onlineUsers[event.userId]
+          for (const id of Object.keys(chat.messages)) {
+            chat.messages[id] = (chat.messages[id] ?? []).filter(message => message.senderId !== event.userId)
+            chat.setTyping(id, event.userId, false)
+          }
+          void chat.loadConversations()
+        }
+        break
       case 'message.new': {
         const inserted = chat.upsertMessage({ ...event.message, status: 'sent' })
         const conversation = chat.conversations.find(item => item.id === event.message.conversationId)

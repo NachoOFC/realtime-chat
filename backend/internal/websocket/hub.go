@@ -152,3 +152,15 @@ func (h *Hub) OnlineUserIDs() []string {
 	}
 	return result
 }
+
+func (h *Hub) DisconnectUser(userID string) {
+	h.mu.RLock()
+	clients := make([]*Client, 0, len(h.users[userID]))
+	for client := range h.users[userID] {
+		clients = append(clients, client)
+	}
+	h.mu.RUnlock()
+	for _, client := range clients {
+		client.conn.Close(4001, "guest session ended")
+	}
+}

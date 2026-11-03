@@ -1,7 +1,9 @@
 package httpapi
 
 import (
+	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -14,6 +16,7 @@ import (
 )
 
 type Dependencies struct {
+	Google         *users.GoogleHandler
 	Config         config.Config
 	AuthMiddleware func(http.Handler) http.Handler
 	Users          *users.Handler
@@ -26,7 +29,14 @@ func NewRouter(deps Dependencies) http.Handler {
 
 	router.Use(middleware.RequestID)
 	router.Use(middleware.RealIP)
-	router.Use(middleware.Logger)
+	router.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			started := time.Now()
+			rw := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
+			next.ServeHTTP(rw, r)
+			slog.Info("request", "method", r.Method, "path", r.URL.Path, "status", rw.Status(), "duration", time.Since(started))
+		})
+	})
 	router.Use(middleware.Recoverer)
 	router.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{deps.Config.CORSOrigin},
@@ -52,10 +62,17 @@ func NewRouter(deps Dependencies) http.Handler {
 		router.Post("/auth/guest", deps.Users.Guest)
 		router.Post("/auth/register", deps.Users.Register)
 		router.Post("/auth/login", deps.Users.Login)
-		router.Post("/auth/logout", deps.Users.Logout)
+		google := deps.Google
+		if google == nil {
+			google = users.NewGoogleHandler(nil, deps.Config)
+		}
+		router.Get("/auth/providers", google.Status)
+		router.Get("/auth/google", google.Start)
+		router.Get("/auth/google/callback", google.Callback)
 
 		router.Group(func(router chi.Router) {
 			router.Use(deps.AuthMiddleware)
+			router.Post("/auth/logout", deps.Users.Logout)
 
 			router.Get("/me", deps.Users.Me)
 			router.Get("/users", deps.Users.List)

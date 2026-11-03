@@ -13,6 +13,7 @@ const (
 	EventMessageRead       EventType = "message.read"
 	EventTyping            EventType = "typing"
 	EventPresence          EventType = "presence"
+	EventUserRemoved       EventType = "user.removed"
 	EventError             EventType = "error"
 )
 

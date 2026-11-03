@@ -15,6 +15,7 @@ import (
 const maxMessageBytes = 32 * 1024
 
 type Handler struct {
+	ActiveUser    func(context.Context, string) (bool, error)
 	hub           *Hub
 	tickets       *TicketStore
 	chat          *chat.Service
@@ -48,6 +49,13 @@ func (h *Handler) ServeWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if h.ActiveUser != nil {
+		active, err := h.ActiveUser(r.Context(), userID)
+		if err != nil || !active {
+			httputil.Error(w, http.StatusUnauthorized, "La sesión ya no está disponible")
+			return
+		}
+	}
 	conn, err := websocket.Accept(w, r, h.acceptOptions())
 	if err != nil {
 		slog.Warn("no se pudo aceptar websocket", "error", err)

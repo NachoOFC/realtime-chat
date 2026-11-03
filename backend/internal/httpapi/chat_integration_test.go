@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/cookiejar"
@@ -44,7 +45,7 @@ func TestChatOverTLS(t *testing.T) {
 	if databaseURL == "" {
 		t.Fatal("configure CHAT_TEST_DATABASE_URL or DATABASE_URL in the root .env")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 	// Reparse the direct URL so both DNS and TLS SNI target the direct endpoint.
 	// Keeping a pooler SNI would route fresh connections through PgBouncer.
@@ -69,7 +70,7 @@ func TestChatOverTLS(t *testing.T) {
 		t.Fatal("could not create isolated schema:", err)
 	}
 	defer func() {
-		cleanup, stop := context.WithTimeout(context.Background(), 115*time.Second)
+		cleanup, stop := context.WithTimeout(context.Background(), 15*time.Second)
 		defer stop()
 		if _, err := admin.Exec(cleanup, "DROP SCHEMA "+quoted+" CASCADE"); err != nil {
 			t.Error("could not remove temporary schema:", err)
@@ -92,7 +93,7 @@ func TestChatOverTLS(t *testing.T) {
 	if err := pool.QueryRow(ctx, "SELECT current_schema()").Scan(&currentSchema); err != nil || currentSchema != schema {
 		t.Fatal("database did not select the isolated schema; refusing to run migrations", currentSchema, err)
 	}
-	for _, name := range []string{"0001_init.up.sql", "0002_guest_users.up.sql"} {
+	for _, name := range []string{"0001_init.up.sql", "0002_guest_users.up.sql", "0003_google_and_temporary_guests.up.sql"} {
 		migration, err := os.ReadFile(filepath.Join("../../migrations", name))
 		if err != nil {
 			t.Fatal(err)
@@ -106,7 +107,15 @@ func TestChatOverTLS(t *testing.T) {
 	userService := users.NewService(users.NewPostgresRepository(pool), secret, time.Hour)
 	chatService := chat.NewService(chat.NewPostgresRepository(pool))
 	appConfig := config.Config{CORSOrigin: "https://localhost:3000"}
-	router := httpapi.NewRouter(httpapi.Dependencies{Config: appConfig, AuthMiddleware: auth.Middleware(secret), Users: users.NewHandler(userService, "", true, http.SameSiteLaxMode, time.Hour), Chat: chat.NewHandler(chatService), WebSocket: ws.NewHandler(ws.NewHub(), ws.NewTicketStore(time.Minute), chatService, appConfig.CORSOrigin)})
+	hub := ws.NewHub()
+	userHandler := users.NewHandler(userService, "", true, http.SameSiteLaxMode, time.Hour)
+	userHandler.OnGuestDeleted = func(deleted users.DeletedGuest) {
+		hub.Broadcast(ws.OutboundEvent{Type: ws.EventUserRemoved, UserID: deleted.UserID})
+		hub.DisconnectUser(deleted.UserID)
+	}
+	googleHandler := users.NewGoogleHandler(userService, config.Config{JWTSecret: secret, FrontendURL: "https://frontend.test", CookieSecure: true, AccessTokenTTL: time.Hour})
+	googleHandler.Provider = mockGoogleProvider{}
+	router := httpapi.NewRouter(httpapi.Dependencies{Config: appConfig, AuthMiddleware: auth.Middleware(secret, userService.IsActive), Google: googleHandler, Users: userHandler, Chat: chat.NewHandler(chatService), WebSocket: ws.NewHandler(hub, ws.NewTicketStore(time.Minute), chatService, appConfig.CORSOrigin)})
 	server := httptest.NewUnstartedServer(router)
 	server.TLS = appConfig.TLSConfig()
 	server.StartTLS()
@@ -275,5 +284,133 @@ func TestChatOverTLS(t *testing.T) {
 	if list[0].UnreadCount != 1 {
 		t.Fatal("concurrent retry changed unread count", list[0].UnreadCount)
 	}
-	t.Log("HTTPS/WSS, guest cookies, authorization, delivery, history, idempotency, pagination and read state verified")
+
+	// A Google account survives logout and is recovered using its immutable subject.
+	googleClient := client()
+	googleClient.CheckRedirect = func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }
+	googleSignIn := func(c *http.Client) users.User {
+		t.Helper()
+		res, err := c.Get(server.URL + "/api/auth/google")
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		if res.StatusCode != 302 {
+			t.Fatal("Google start failed", res.StatusCode)
+		}
+		location, err := url.Parse(res.Header.Get("Location"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		res, err = c.Get(server.URL + "/api/auth/google/callback?code=valid&state=" + url.QueryEscape(location.Query().Get("state")))
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		if res.StatusCode != 303 || res.Header.Get("Location") != "https://frontend.test/chat" {
+			t.Fatal("Google callback failed", res.StatusCode, res.Header.Get("Location"))
+		}
+		persistent := false
+		for _, cookie := range res.Cookies() {
+			if cookie.Name == auth.CookieName {
+				persistent = cookie.MaxAge > 0 && cookie.HttpOnly && cookie.Secure
+			}
+		}
+		if !persistent {
+			t.Fatal("Google cookie must persist securely")
+		}
+		var user users.User
+		request(c, "GET", "/api/me", nil, 200, &user)
+		return user
+	}
+	googleUser := googleSignIn(googleClient)
+	if googleUser.IsGuest || googleUser.AuthProvider != "google" || googleUser.ID == alice.ID {
+		t.Fatal("Google identity was not isolated from a matching guest nickname")
+	}
+	var mixed chat.Conversation
+	request(googleClient, "POST", "/api/conversations", map[string]string{"peerId": carol.ID}, 201, &mixed)
+	permanent, err := chatService.SendMessage(ctx, googleUser.ID, mixed.ID, uuid.NewString(), "Mensaje de Google que se conserva")
+	if err != nil {
+		t.Fatal(err)
+	}
+	temporary, err := chatService.SendMessage(ctx, carol.ID, mixed.ID, uuid.NewString(), "Mensaje de invitado que se elimina")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = chatService.MarkRead(ctx, googleUser.ID, mixed.ID, temporary.ID); err != nil {
+		t.Fatal(err)
+	}
+	request(outsider, "POST", "/api/auth/logout", nil, 204, nil)
+	request(outsider, "GET", "/api/me", nil, 401, nil)
+	var remaining chat.MessagePage
+	request(googleClient, "GET", "/api/conversations/"+mixed.ID+"/messages", nil, 200, &remaining)
+	if len(remaining.Messages) != 1 || remaining.Messages[0].ID != permanent.ID {
+		t.Fatal("guest deletion removed another participant's messages")
+	}
+	request(googleClient, "GET", "/api/conversations", nil, 200, &list)
+	if len(list) != 1 || list[0].Peer.ID != "" || list[0].UnreadCount != 0 {
+		t.Fatal("closed guest chat did not retain the correct history", list)
+	}
+	if _, err = chatService.SendMessage(ctx, googleUser.ID, mixed.ID, uuid.NewString(), "No enviar a un invitado eliminado"); !errors.Is(err, chat.ErrClosed) {
+		t.Fatal("closed chat still accepts messages", err)
+	}
+	request(googleClient, "POST", "/api/auth/logout", nil, 204, nil)
+	recovered := googleSignIn(googleClient)
+	if recovered.ID != googleUser.ID {
+		t.Fatal("Google sign-in created another account")
+	}
+	request(googleClient, "GET", "/api/conversations/"+mixed.ID+"/messages", nil, 200, &remaining)
+	if len(remaining.Messages) != 1 {
+		t.Fatal("Google history lost after signing in again")
+	}
+	// Nicknames can be reused, but the previous guest's token never gains access.
+	var newCarol users.User
+	freshGuest := client()
+	request(freshGuest, "POST", "/api/auth/guest", map[string]string{"username": "Carol"}, 201, &newCarol)
+	if newCarol.ID == carol.ID {
+		t.Fatal("deleted guest identity was recovered")
+	}
+	if active, err := userService.IsActive(ctx, carol.ID); err != nil || active {
+		t.Fatal("deleted guest token remains active", err)
+	}
+	var directory []users.User
+	request(freshGuest, "GET", "/api/users", nil, 200, &directory)
+	foundGoogle := false
+	for _, user := range directory {
+		if user.Email != "" {
+			t.Fatal("directory exposes email")
+		}
+		if user.ID == googleUser.ID {
+			foundGoogle = user.AuthProvider == "google"
+		}
+	}
+	if !foundGoogle {
+		t.Fatal("guest cannot distinguish Google users")
+	}
+	if _, err = users.NewPostgresRepository(pool).DeleteGuest(ctx, googleUser.ID, false); !errors.Is(err, users.ErrNotFound) {
+		t.Fatal("guest cleanup accepted a permanent account", err)
+	}
+	// Expiration removes abandoned guests even if no explicit logout was received.
+	if _, err = pool.Exec(ctx, "UPDATE users SET guest_expires_at=now()-interval '1 minute' WHERE id=$1", newCarol.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err = userService.ExpireGuests(ctx, userHandler.OnGuestDeleted); err != nil {
+		t.Fatal(err)
+	}
+	if active, err := userService.IsActive(ctx, newCarol.ID); err != nil || active {
+		t.Fatal("expired guest still active", err)
+	}
+	t.Log("HTTPS/WSS, persistence, Google recovery, badges, guest deletion and session expiration verified")
+}
+
+type mockGoogleProvider struct{}
+
+func (mockGoogleProvider) AuthorizationURL(state, nonce, verifier string) string {
+	return "https://google.test/authorize?state=" + url.QueryEscape(state)
+}
+func (mockGoogleProvider) Exchange(_ context.Context, code, nonce, verifier string) (users.GoogleIdentity, error) {
+	if code != "valid" || nonce == "" || verifier == "" {
+		return users.GoogleIdentity{}, errors.New("invalid mock authorization")
+	}
+	return users.GoogleIdentity{Subject: "google-integration-subject", Email: "google-user@example.test", Name: "Alice"}, nil
 }

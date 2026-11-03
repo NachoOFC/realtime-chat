@@ -1,6 +1,6 @@
 # Realtime Chat
 
-Chat 1:1 en tiempo real estilo WhatsApp. Incluye acceso con apodo, conversaciones privadas, persistencia en PostgreSQL, WebSockets y soporte HTTPS/WSS.
+Chat 1:1 en tiempo real estilo WhatsApp. Incluye acceso con Google o apodo temporal, conversaciones privadas, persistencia en PostgreSQL, WebSockets y soporte HTTPS/WSS.
 
 ## Stack
 
@@ -12,7 +12,7 @@ Chat 1:1 en tiempo real estilo WhatsApp. Incluye acceso con apodo, conversacione
 | Base de datos | PostgreSQL 16 + pgx |
 | Deploy | Render |
 
-No se usa Next.js ni React. Los usuarios entran con un **apodo**, sin correo ni contraseña, y la sesión se guarda en una **cookie HttpOnly** (nunca en `localStorage`).
+No se usa Next.js ni React. Los usuarios pueden entrar con **Google** o con un **apodo de invitado**. La sesión usa una cookie HttpOnly; el acceso de invitado es temporal y sus datos se eliminan al salir.
 
 ## Estructura
 
@@ -161,14 +161,15 @@ pnpm backend:restart
 
 Comprueba la API en `http://localhost:8080/healthz`. PM2 mantiene el backend en segundo plano cuando cierras la terminal, pero esta configuración no lo inicia automáticamente al reiniciar Windows. Tampoco detecta por sí sola una API bloqueada que mantiene el proceso abierto.
 
-## Acceso con apodo
+## Acceso con Google o apodo
 
-La app muestra el formulario de apodo en /login cuando no hay una sesión activa. Para entrar necesitas el backend encendido y PostgreSQL configurado con las migraciones aplicadas. El apodo se registra mediante POST /api/auth/guest y la sesión se guarda en una cookie HttpOnly.
+En `/login` puedes entrar con Google o como invitado con apodo. Google permite recuperar la misma cuenta y su historial; al salir como invitado se eliminan su perfil y sus mensajes. Para entrar necesitas el backend y PostgreSQL con las tres migraciones aplicadas. [Configurar Google y conocer la política de invitados](docs/google-y-invitados.md).
 
 ## Chat y TLS
 
 Entra con un apodo y selecciona **Nuevo chat** para buscar otro usuario. Para probar dos sesiones, abre una ventana de incógnito con otro apodo. El chat guarda los mensajes, recupera el historial por páginas, confirma lecturas e indica quién está escribiendo.
 
+- [Configurar Google e invitados temporales](docs/google-y-invitados.md)
 - [Configurar HTTPS/WSS local y en producción](docs/tls.md)
 - [Ejemplo de lo que guarda cada tabla](docs/datos-ejemplo.md)
 

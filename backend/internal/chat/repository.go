@@ -17,6 +17,7 @@ import (
 )
 
 var (
+	ErrClosed   = errors.New("el otro participante ya salió de la conversación")
 	ErrNotFound = errors.New("usuario o mensaje no encontrado")
 	ErrConflict = errors.New("clientMessageId ya utilizado para otro mensaje")
 )
@@ -37,16 +38,16 @@ func NewPostgresRepository(pool *pgxpool.Pool) *PostgresRepository {
 	return &PostgresRepository{pool: pool}
 }
 
-const conversationQuery = `SELECT c.id::text, peer.id::text, peer.username,
- COALESCE(peer.avatar_url, ''), peer.last_seen_at, mine.unread_count,
+const conversationQuery = `SELECT c.id::text, COALESCE(peer.id::text, ''), COALESCE(peer.username, 'Invitado que salió'),
+ COALESCE(peer.avatar_url, ''), peer.last_seen_at, CASE WHEN peer.google_subject IS NOT NULL THEN 'google' WHEN peer.is_guest OR peer.id IS NULL THEN 'guest' ELSE 'password' END, mine.unread_count,
  COALESCE(last.created_at, c.created_at),
  CASE WHEN last.id IS NULL THEN NULL ELSE jsonb_build_object(
  'id', last.id, 'conversationId', last.conversation_id, 'senderId', last.sender_id,
  'content', last.content, 'clientMessageId', last.client_message_id, 'createdAt', last.created_at) END
  FROM conversations c
  JOIN conversation_members mine ON mine.conversation_id = c.id AND mine.user_id = $1
- JOIN conversation_members other ON other.conversation_id = c.id AND other.user_id <> $1
- JOIN users peer ON peer.id = other.user_id
+ LEFT JOIN conversation_members other ON other.conversation_id = c.id AND other.user_id <> $1
+ LEFT JOIN users peer ON peer.id = other.user_id
  LEFT JOIN LATERAL (SELECT * FROM messages WHERE conversation_id = c.id
  ORDER BY created_at DESC, id DESC LIMIT 1) last ON true`
 
@@ -54,7 +55,7 @@ func scanConversation(row pgx.Row) (Conversation, error) {
 	var c Conversation
 	var last []byte
 	err := row.Scan(&c.ID, &c.Peer.ID, &c.Peer.Username, &c.Peer.AvatarURL, &c.Peer.LastSeenAt,
-		&c.UnreadCount, &c.UpdatedAt, &last)
+		&c.Peer.AuthProvider, &c.UnreadCount, &c.UpdatedAt, &last)
 	if err == nil && last != nil {
 		err = json.Unmarshal(last, &c.LastMessage)
 	}
@@ -205,6 +206,13 @@ func (r *PostgresRepository) CreateMessage(ctx context.Context, userID, conversa
 	defer tx.Rollback(ctx)
 	if err = lockConversation(ctx, tx, userID, conversationID); err != nil {
 		return Message{}, err
+	}
+	var peerActive bool
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM conversation_members cm JOIN users u ON u.id=cm.user_id WHERE cm.conversation_id=$1 AND cm.user_id<>$2 AND (NOT u.is_guest OR u.guest_expires_at>now()))`, conversationID, userID).Scan(&peerActive); err != nil {
+		return Message{}, err
+	}
+	if !peerActive {
+		return Message{}, ErrClosed
 	}
 	m, err := scanMessage(tx.QueryRow(ctx, `INSERT INTO messages (conversation_id, sender_id, client_message_id, content, created_at)
  VALUES ($1,$2,$3,$4,clock_timestamp()) ON CONFLICT (conversation_id, client_message_id) DO NOTHING RETURNING `+messageColumns,

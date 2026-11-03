@@ -64,7 +64,13 @@ export function useChatSocket() {
         }
       }
 
-      socket.onclose = () => {
+      socket.onclose = (event) => {
+        if (event.code === 4001) {
+          manuallyClosed = true
+          status.value = 'closed'
+          for (const handler of handlers) handler({ type: 'auth.expired' })
+          return
+        }
         status.value = 'closed'
         if (!manuallyClosed) {
           scheduleReconnect()
@@ -74,7 +80,12 @@ export function useChatSocket() {
       socket.onerror = () => {
         socket?.close()
       }
-    } catch {
+    } catch (error) {
+      const statusCode = (error as { statusCode?: number }).statusCode
+      if (statusCode === 401) {
+        manuallyClosed = true
+        for (const handler of handlers) handler({ type: 'auth.expired' })
+      }
       status.value = 'closed'
       scheduleReconnect()
     }

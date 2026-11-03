@@ -10,6 +10,7 @@ import (
 )
 
 type Handler struct {
+	OnGuestDeleted func(DeletedGuest)
 	service        *Service
 	cookieDomain   string
 	cookieSecure   bool
@@ -55,7 +56,7 @@ func (h *Handler) Guest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	auth.SetSessionCookie(w, token, h.cookieDomain, h.cookieSecure, h.cookieSameSite, h.tokenTTL)
+	auth.SetSessionCookie(w, token, h.cookieDomain, h.cookieSecure, h.cookieSameSite, 0)
 	httputil.WriteJSON(w, http.StatusCreated, user)
 }
 
@@ -75,7 +76,27 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	httputil.WriteJSON(w, http.StatusOK, user)
 }
 
-func (h *Handler) Logout(w http.ResponseWriter, _ *http.Request) {
+func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.UserID(r.Context())
+	if !ok {
+		httputil.Error(w, http.StatusUnauthorized, "No autenticado")
+		return
+	}
+	user, err := h.service.FindByID(r.Context(), userID)
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	if user.IsGuest {
+		deleted, err := h.service.DeleteGuest(r.Context(), userID)
+		if err != nil {
+			writeServiceError(w, err)
+			return
+		}
+		if h.OnGuestDeleted != nil {
+			h.OnGuestDeleted(deleted)
+		}
+	}
 	auth.ClearSessionCookie(w, h.cookieDomain, h.cookieSecure, h.cookieSameSite)
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -105,6 +126,9 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	for i := range list {
+		list[i].Email = ""
+	}
 	httputil.WriteJSON(w, http.StatusOK, list)
 }
 
@@ -114,6 +138,8 @@ func writeServiceError(w http.ResponseWriter, err error) {
 		httputil.Error(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, ErrInvalidCredentials):
 		httputil.Error(w, http.StatusUnauthorized, err.Error())
+	case errors.Is(err, ErrEmailInUse):
+		httputil.Error(w, http.StatusConflict, err.Error())
 	case errors.Is(err, ErrUsernameTaken):
 		httputil.Error(w, http.StatusConflict, err.Error())
 	case errors.Is(err, ErrNotFound):

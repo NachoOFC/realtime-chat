@@ -75,7 +75,7 @@ func (s *Service) GuestLogin(ctx context.Context, username string) (User, string
 		return User{}, "", fmt.Errorf("%w: el apodo solo puede tener letras, números, espacios, puntos, guiones y guiones bajos", ErrValidation)
 	}
 
-	user, err := s.repository.CreateGuest(ctx, username)
+	user, err := s.repository.CreateGuest(ctx, username, time.Now().Add(s.tokenTTL))
 	if err != nil {
 		return User{}, "", err
 	}
@@ -124,4 +124,41 @@ func (s *Service) FindByID(ctx context.Context, id string) (User, error) {
 
 func (s *Service) List(ctx context.Context, excludeID string) ([]User, error) {
 	return s.repository.List(ctx, excludeID)
+}
+
+func (s *Service) GoogleLogin(ctx context.Context, identity GoogleIdentity) (User, string, error) {
+	if identity.Subject == "" || identity.Email == "" {
+		return User{}, "", ErrInvalidCredentials
+	}
+	user, err := s.repository.FindOrCreateGoogle(ctx, identity)
+	if err != nil {
+		return User{}, "", err
+	}
+	token, err := auth.IssueToken(s.jwtSecret, user.ID, s.tokenTTL)
+	return user, token, err
+}
+func (s *Service) IsActive(ctx context.Context, id string) (bool, error) {
+	return s.repository.IsActive(ctx, id)
+}
+func (s *Service) DeleteGuest(ctx context.Context, id string) (DeletedGuest, error) {
+	return s.repository.DeleteGuest(ctx, id, false)
+}
+func (s *Service) ExpireGuests(ctx context.Context, notify func(DeletedGuest)) error {
+	ids, err := s.repository.ExpiredGuestIDs(ctx)
+	if err != nil {
+		return err
+	}
+	for _, id := range ids {
+		deleted, err := s.repository.DeleteGuest(ctx, id, true)
+		if errors.Is(err, ErrNotFound) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		if notify != nil {
+			notify(deleted)
+		}
+	}
+	return nil
 }

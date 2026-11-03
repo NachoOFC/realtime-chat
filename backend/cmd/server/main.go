@@ -56,10 +56,34 @@ func main() {
 	hub := ws.NewHub()
 	tickets := ws.NewTicketStore(cfg.WSTicketTTL)
 	websocketHandler := ws.NewHandler(hub, tickets, chatService, cfg.CORSOrigin)
+	websocketHandler.ActiveUser = usersService.IsActive
+	usersHandler.OnGuestDeleted = func(deleted users.DeletedGuest) {
+		hub.Broadcast(ws.OutboundEvent{Type: ws.EventUserRemoved, UserID: deleted.UserID})
+		hub.DisconnectUser(deleted.UserID)
+	}
+	go func() {
+		cleanup := func() {
+			if err := usersService.ExpireGuests(ctx, usersHandler.OnGuestDeleted); err != nil && ctx.Err() == nil {
+				slog.Error("No se pudieron eliminar invitados vencidos", "error", err)
+			}
+		}
+		cleanup()
+		ticker := time.NewTicker(time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				cleanup()
+			}
+		}
+	}()
 
 	router := httpapi.NewRouter(httpapi.Dependencies{
 		Config:         cfg,
-		AuthMiddleware: auth.Middleware(cfg.JWTSecret),
+		AuthMiddleware: auth.Middleware(cfg.JWTSecret, usersService.IsActive),
+		Google:         users.NewGoogleHandler(usersService, cfg),
 		Users:          usersHandler,
 		Chat:           chatHandler,
 		WebSocket:      websocketHandler,

@@ -58,7 +58,7 @@ async function loadEarlier() {
       </span>
 
       <div>
-        <p class="font-medium">{{ chat.activeConversation.peer.username }}</p>
+        <p class="flex items-center gap-2 font-medium">{{ chat.activeConversation.peer.username }}<AccountBadge :provider="chat.activeConversation.peer.authProvider" /></p>
         <p class="text-xs text-slate-500 dark:text-slate-400">Chat 1:1</p>
       </div>
     </header>
@@ -79,7 +79,8 @@ async function loadEarlier() {
 
     <TypingIndicator :active="peerTyping" />
 
-    <MessageComposer :key="chat.activeConversation.id" :conversation-id="chat.activeConversation.id" />
+    <p v-if="!chat.activeConversation.peer.id" class="border-t border-slate-200 p-3 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">El invitado salió. Sus mensajes se eliminaron; puedes consultar los que tú enviaste.</p>
+    <MessageComposer v-else :key="chat.activeConversation.id" :conversation-id="chat.activeConversation.id" />
   </section>
 
   <section v-else class="flex flex-1 items-center justify-center bg-white dark:bg-slate-900 max-md:hidden">
