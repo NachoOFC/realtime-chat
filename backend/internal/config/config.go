@@ -40,7 +40,7 @@ func Load() Config {
 		TLSCertFile:        os.Getenv("TLS_CERT_FILE"),
 		TLSKeyFile:         os.Getenv("TLS_KEY_FILE"),
 		AppEnv:             getenv("APP_ENV", "development"),
-		HTTPAddr:           getenv("HTTP_ADDR", ":8080"),
+		HTTPAddr:           getenv("HTTP_ADDR", ":"+getenv("PORT", "8080")),
 		DatabaseURL:        getenv("DATABASE_URL", "postgres://chat:chat@localhost:5432/chat?sslmode=disable"),
 		CORSOrigin:         getenv("CORS_ORIGIN", "http://localhost:3000"),
 		JWTSecret:          getenv("JWT_SECRET", defaultJWTSecret),

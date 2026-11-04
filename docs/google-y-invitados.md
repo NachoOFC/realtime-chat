@@ -36,7 +36,7 @@ La migración agrega `google_subject` y `guest_expires_at` a `users`. No borra c
 
 6. Reinicia el backend. Abre `https://localhost:3000/login`; «Continuar con Google» se habilita cuando la configuración está completa.
 
-`FRONTEND_URL` es opcional y por defecto toma `CORS_ORIGIN`; debe ser el origen del frontend, por ejemplo `https://localhost:3000`. En producción registra el callback HTTPS público del backend y actualiza `GOOGLE_REDIRECT_URL`, `FRONTEND_URL` y `CORS_ORIGIN` con las URLs reales. El tipo de aplicación y la URI exacta son requisitos de [Google OAuth](https://developers.google.com/identity/protocols/oauth2/web-server).
+`FRONTEND_URL` es opcional y por defecto toma `CORS_ORIGIN`; debe ser el origen del frontend, por ejemplo `https://localhost:3000`. Para Netlify + Render, registra el callback HTTPS del frontend (`https://tu-chat.netlify.app/api/auth/google/callback`), cuyo proxy lo entrega al backend, y actualiza `GOOGLE_REDIRECT_URL`, `FRONTEND_URL` y `CORS_ORIGIN` con las URLs reales. El tipo de aplicación y la URI exacta son requisitos de [Google OAuth](https://developers.google.com/identity/protocols/oauth2/web-server).
 
 El flujo usa authorization code con PKCE, `state` firmado y cookie HttpOnly, `nonce`, validación de firma RS256, emisor, audiencia, vencimiento y correo verificado. Solo solicita `openid`, `email` y `profile`; no accede a Gmail ni guarda los tokens de Google. La clave de identidad es `sub`, no el correo. No vincula automáticamente una cuenta local o de invitado por compartir correo o apodo. [Google OpenID Connect](https://developers.google.com/identity/openid-connect/openid-connect)
 
@@ -51,3 +51,5 @@ Por eso la eliminación inmediata se realiza al pulsar **Salir**, tras una confi
 Las conexiones WebSocket de un invitado eliminado se cierran y su cookie anterior deja de autenticar peticiones. El apodo queda disponible para una identidad nueva, que no recupera los mensajes anteriores.
 
 Los mensajes de los otros participantes se conservan en un chat cerrado con el nombre «Invitado que salió». Se actualizan las lecturas y los contadores y ya no se puede enviar a ese chat.
+
+Para publicar la app, sigue [la guía de despliegue](despliegue.md).

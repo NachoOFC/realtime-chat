@@ -1,12 +1,12 @@
-import type { ClientEvent, ServerEvent, SocketStatus } from '~/types'
+﻿import type { ClientEvent, ServerEvent, SocketStatus } from '~/types'
 import { useApi } from '~/composables/useApi'
 
 type ServerEventHandler = (event: ServerEvent) => void
-
 let socket: WebSocket | null = null
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 let retryCount = 0
 let manuallyClosed = false
+let connectionGeneration = 0
 const handlers = new Set<ServerEventHandler>()
 
 export function useChatSocket() {
@@ -15,114 +15,79 @@ export function useChatSocket() {
 
   function onEvent(handler: ServerEventHandler) {
     handlers.add(handler)
-    return () => {
-      handlers.delete(handler)
-    }
+    return () => { handlers.delete(handler) }
   }
-
   function send(event: ClientEvent) {
-    if (!socket || socket.readyState !== WebSocket.OPEN) {
-      return false
-    }
+    if (!socket || socket.readyState !== WebSocket.OPEN) return false
     socket.send(JSON.stringify(event))
     return true
   }
-
   async function connect() {
-    if (!import.meta.client || status.value === 'open' || status.value === 'connecting') {
-      return
-    }
-
+    if (!import.meta.client || status.value === 'open' || status.value === 'connecting') return
     manuallyClosed = false
+    const generation = ++connectionGeneration
+    const isCurrent = () => generation === connectionGeneration && !manuallyClosed
     status.value = 'connecting'
-
     try {
-      const response = await useApi<{ ticket: string }>('/api/ws/ticket', {
-        method: 'POST',
-      })
-
-      if (!response.ticket) {
-        throw new Error('Ticket vacío')
-      }
-
+      const response = await useApi<{ ticket: string }>('/api/ws/ticket', { method: 'POST' })
+      if (!isCurrent()) return
+      if (!response.ticket) throw new Error('Ticket vacío')
       const url = new URL('/ws', config.public.wsBase)
       url.searchParams.set('ticket', response.ticket)
-
-      socket = new WebSocket(url.toString())
-
-      socket.onopen = () => {
+      const connection = new WebSocket(url.toString())
+      socket = connection
+      const ownsConnection = () => isCurrent() && socket === connection
+      connection.onopen = () => {
+        if (!ownsConnection()) { connection.close(); return }
         retryCount = 0
         status.value = 'open'
       }
-
-      socket.onmessage = (event) => {
+      connection.onmessage = event => {
+        if (!ownsConnection()) return
         try {
           const parsed = JSON.parse(event.data as string) as ServerEvent
-          handlers.forEach((handler) => handler(parsed))
-        } catch {
-          return
-        }
+          handlers.forEach(handler => handler(parsed))
+        } catch { return }
       }
-
-      socket.onclose = (event) => {
+      connection.onclose = event => {
+        if (!ownsConnection()) return
+        socket = null
+        status.value = 'closed'
         if (event.code === 4001) {
           manuallyClosed = true
-          status.value = 'closed'
           for (const handler of handlers) handler({ type: 'auth.expired' })
           return
         }
-        status.value = 'closed'
-        if (!manuallyClosed) {
-          scheduleReconnect()
-        }
+        scheduleReconnect()
       }
-
-      socket.onerror = () => {
-        socket?.close()
+      connection.onerror = () => {
+        if (ownsConnection()) connection.close()
       }
     } catch (error) {
-      const statusCode = (error as { statusCode?: number }).statusCode
-      if (statusCode === 401) {
+      if (!isCurrent()) return
+      status.value = 'closed'
+      if ((error as { statusCode?: number }).statusCode === 401) {
         manuallyClosed = true
         for (const handler of handlers) handler({ type: 'auth.expired' })
       }
-      status.value = 'closed'
       scheduleReconnect()
     }
   }
-
   function scheduleReconnect() {
-    if (reconnectTimer || manuallyClosed) {
-      return
-    }
-
+    if (reconnectTimer || manuallyClosed) return
     const delay = Math.min(1000 * 2 ** retryCount, 15000)
-    retryCount += 1
-
-    reconnectTimer = setTimeout(() => {
-      reconnectTimer = null
-      void connect()
-    }, delay)
+    retryCount++
+    reconnectTimer = setTimeout(() => { reconnectTimer = null; void connect() }, delay)
   }
-
   function disconnect() {
     manuallyClosed = true
-
-    if (reconnectTimer) {
-      clearTimeout(reconnectTimer)
-      reconnectTimer = null
-    }
-
-    socket?.close()
+    connectionGeneration++
+    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null }
+    const previous = socket
     socket = null
+    previous?.close()
+    retryCount = 0
     status.value = 'idle'
   }
-
-  return {
-    status,
-    connect,
-    disconnect,
-    send,
-    onEvent,
-  }
+  return { status, connect, disconnect, send, onEvent }
 }

@@ -249,21 +249,10 @@ Servidor → cliente:
 5. Ejecutar las pruebas de integración en CI.
 6. Redis Pub/Sub si se despliegan varias instancias.
 
-## Deploy en Render
+## Despliegue en Netlify + Render
 
-### Backend
+El frontend se publica en Netlify y el backend Go en Render. El repositorio incluye `netlify.toml` y `render.yaml` para que cada servicio construya su carpeta. La API HTTP pasa por un proxy de Nuxt en el dominio del frontend; el WebSocket usa la URL pública de Render y un ticket de un solo uso.
 
-- Root directory: `backend`
-- Build: `go build -o server ./cmd/server`
-- Start: `./server`
-- Health check: `/healthz`
-- Variables: las mismas de `.env`, con `COOKIE_SECURE=true` y un `JWT_SECRET` aleatorio.
+Sigue [la guía de despliegue](docs/despliegue.md) para configurar el mismo repositorio en ambos servicios, las variables y el callback de Google. Los archivos `.env.production.example` y `frontend/.env.production.example` son referencias sin credenciales.
 
-### Frontend
-
-- Root directory: `frontend`
-- Build: `pnpm install && pnpm build`
-- Start: `node .output/server/index.mjs`
-- Variables públicas apuntando a las URLs de producción.
-
-Si frontend y backend están en dominios distintos, usar `COOKIE_SAME_SITE=none` y `COOKIE_SECURE=true`. Para máxima seguridad, servirlos bajo el mismo dominio con un proxy inverso.
+En producción, Render y Netlify gestionan HTTPS. Los certificados locales y PM2 se usan solo en los entornos donde los configuraste; Render compila y supervisa el binario Go directamente.

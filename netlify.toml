@@ -1,0 +1,15 @@
+[build]
+  base = "."
+  command = "pnpm --dir frontend build"
+  publish = "frontend/dist"
+
+[build.environment]
+  NODE_VERSION = "24"
+  NITRO_PRESET = "netlify"
+  PNPM_FLAGS = "--shamefully-hoist"
+  NUXT_DEV_TLS = "false"
+  NUXT_PUBLIC_API_BASE = ""
+
+# In the Netlify UI choose frontend as Package directory.
+# Add NUXT_API_PROXY_TARGET and NUXT_PUBLIC_WS_BASE for Builds AND Functions.
+# The Nitro preset produces the SSR function inside frontend/.netlify/.

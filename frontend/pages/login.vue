@@ -21,7 +21,7 @@ const oauthMessage = computed(() => {
 function continueWithGoogle() {
   if (!providers.value.google || googleLoading.value) return
   googleLoading.value = true
-  window.location.assign(new URL('/api/auth/google', config.public.apiBase).href)
+  window.location.assign(new URL('/api/auth/google', config.public.apiBase || window.location.origin).href)
 }
 async function submit() {
   errorMessage.value = null

@@ -192,6 +192,7 @@ func lockConversation(ctx context.Context, tx pgx.Tx, userID, conversationID str
 	var id string
 	err := tx.QueryRow(ctx, `SELECT c.id::text FROM conversations c WHERE c.id=$1
  AND EXISTS(SELECT 1 FROM conversation_members WHERE conversation_id=c.id AND user_id=$2)
+ AND EXISTS(SELECT 1 FROM users actor WHERE actor.id=$2 AND (NOT actor.is_guest OR actor.guest_expires_at>now()))
  FOR UPDATE`, conversationID, userID).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrForbidden

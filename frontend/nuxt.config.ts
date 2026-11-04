@@ -15,9 +15,16 @@ export default defineNuxtConfig({
     configPath: '~/tailwind.config.ts',
   },
   components: [{ path: '~/components', pathPrefix: false }],
+  routeRules: {
+    '/': { headers: { 'cache-control': 'private, no-store' } },
+    '/login': { headers: { 'cache-control': 'private, no-store' } },
+    '/chat': { headers: { 'cache-control': 'private, no-store' } },
+    '/chat/**': { headers: { 'cache-control': 'private, no-store' } },
+  },
   runtimeConfig: {
+    apiProxyTarget: '',
     public: {
-      apiBase: 'http://localhost:8080',
+      apiBase: '',
       wsBase: 'ws://localhost:8080',
     },
   },

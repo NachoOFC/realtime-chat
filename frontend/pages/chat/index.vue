@@ -7,9 +7,10 @@ const chat = useChatStore()
 const auth = useAuthStore()
 const socket = useChatSocket()
 let stopListening: (() => void) | undefined
+let disposed = false
 const readSent = new Map<string, string>()
 function markVisibleRead() {
-  if (document.visibilityState !== 'visible' || !document.hasFocus() || socket.status.value !== 'open') return
+  if (disposed || document.visibilityState !== 'visible' || !document.hasFocus() || socket.status.value !== 'open') return
   const id = chat.activeConversationId
   const message = chat.activeMessages.filter(item => item.status !== 'sending').at(-1)
   if (id && message && readSent.get(id) !== message.id && socket.send({ type: 'message.read', conversationId: id, messageId: message.id })) readSent.set(id, message.id)
@@ -34,6 +35,8 @@ onMounted(async () => {
             chat.messages[id] = (chat.messages[id] ?? []).filter(message => message.senderId !== event.userId)
             chat.setTyping(id, event.userId, false)
           }
+          chat.invalidateHistories()
+          if (chat.activeConversationId) void chat.loadMessages(chat.activeConversationId)
           void chat.loadConversations()
         }
         break
@@ -63,9 +66,11 @@ onMounted(async () => {
   document.addEventListener('visibilitychange', markVisibleRead)
   window.addEventListener('focus', markVisibleRead)
   await chat.loadConversations()
+  if (disposed) return
   await socket.connect()
 })
 onBeforeUnmount(() => {
+  disposed = true
   stopListening?.()
   document.removeEventListener('visibilitychange', markVisibleRead)
   window.removeEventListener('focus', markVisibleRead)
@@ -79,6 +84,7 @@ watch(() => chat.activeConversationId, (id, previous) => {
 watch(() => socket.status.value, status => {
   if (status === 'open') {
     readSent.clear()
+    chat.invalidateHistories()
     // Refresh history after reconnecting so messages sent while offline are recovered.
     void chat.loadConversations()
     if (chat.activeConversationId) {

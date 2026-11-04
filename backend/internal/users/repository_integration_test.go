@@ -166,8 +166,15 @@ func TestGoogleAccountsAndGuestCleanup(t *testing.T) {
 	if err != nil || replacement.ID == guest.ID {
 		t.Fatal("deleted nickname cannot be reused safely", err)
 	}
+	expiryChat, err := chats.CreateDirect(ctx, account.ID, replacement.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if _, err = pool.Exec(ctx, "UPDATE users SET guest_expires_at=now()-interval '1 minute' WHERE id=$1", replacement.ID); err != nil {
 		t.Fatal(err)
+	}
+	if _, err = chats.SendMessage(ctx, replacement.ID, expiryChat.ID, uuid.NewString(), "Expired"); !errors.Is(err, chat.ErrForbidden) {
+		t.Fatal("expired guest can send before cleanup", err)
 	}
 	if err = service.ExpireGuests(ctx, nil); err != nil {
 		t.Fatal(err)

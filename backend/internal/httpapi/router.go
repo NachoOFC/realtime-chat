@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"realtime-chat/backend/internal/auth"
 	"realtime-chat/backend/internal/chat"
 	"realtime-chat/backend/internal/config"
 	"realtime-chat/backend/internal/httputil"
@@ -38,6 +39,7 @@ func NewRouter(deps Dependencies) http.Handler {
 		})
 	})
 	router.Use(middleware.Recoverer)
+	router.Use(auth.OriginGuard(deps.Config.CORSOrigin))
 	router.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{deps.Config.CORSOrigin},
 		AllowedMethods:   []string{"GET", "POST", "PATCH", "DELETE", "OPTIONS"},

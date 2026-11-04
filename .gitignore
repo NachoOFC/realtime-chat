@@ -39,3 +39,6 @@ Thumbs.db
 
 # Certificados locales (incluyen una clave privada)
 .certs/
+
+# Netlify build output
+.netlify/
