@@ -8,12 +8,14 @@ type ApiOptions = {
 export function useApi<T>(path: string, options: ApiOptions = {}): Promise<T> {
   const config = useRuntimeConfig()
 
-  return $fetch<T>(path, {
-    baseURL: config.public.apiBase,
+  // Internal SSR requests forward the current request cookies to the API proxy.
+  const requestFetch = import.meta.server && !config.public.apiBase ? useRequestFetch() : $fetch
+  return requestFetch<T>(path, {
+    baseURL: config.public.apiBase || undefined,
     credentials: 'include',
     method: options.method,
     body: options.body,
     query: options.query,
-    headers: options.headers,
+    headers: { ...(import.meta.server ? useRequestHeaders(['cookie']) : {}), ...options.headers },
   })
 }

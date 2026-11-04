@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useAuthStore } from '~/stores/auth'
 import { useChatStore } from '~/stores/chat'
+const loadingEarlier = ref(false)
 
 const chat = useChatStore()
 const auth = useAuthStore()
@@ -20,7 +21,20 @@ async function scrollToBottom() {
 }
 
 watch(() => chat.activeConversationId, scrollToBottom)
-watch(() => chat.activeMessages.length, scrollToBottom)
+watch(() => chat.activeMessages.length, () => { if (!loadingEarlier.value) void scrollToBottom() })
+async function loadEarlier() {
+  const id = chat.activeConversationId
+  const cursor = id ? chat.nextCursors[id] : undefined
+  if (!id || !cursor || loadingEarlier.value) return
+  loadingEarlier.value = true
+  const element = scroller.value
+  const previousHeight = element?.scrollHeight ?? 0
+  try {
+    await chat.loadMessages(id, cursor)
+    await nextTick()
+    if (element) element.scrollTop += element.scrollHeight - previousHeight
+  } finally { loadingEarlier.value = false }
+}
 </script>
 
 <template>
@@ -28,29 +42,30 @@ watch(() => chat.activeMessages.length, scrollToBottom)
     v-if="chat.activeConversation"
     class="flex min-w-0 flex-1 flex-col"
   >
-    <header class="flex items-center gap-3 border-b border-slate-200 px-4 py-3">
+    <header class="flex items-center gap-3 border-b border-slate-200 dark:border-slate-700 px-4 py-3">
       <button
         type="button"
-        class="rounded-lg border border-slate-300 px-2 py-1 text-sm text-slate-600 md:hidden"
+        class="rounded-lg border border-slate-300 dark:border-slate-600 px-2 py-1 text-sm text-slate-600 dark:text-slate-300 md:hidden"
         @click="chat.activeConversationId = null"
       >
         Volver
       </button>
 
       <span
-        class="flex size-9 items-center justify-center rounded-full bg-slate-200 text-sm font-semibold text-slate-700"
+        class="flex size-9 items-center justify-center rounded-full bg-slate-200 dark:bg-slate-700 text-sm font-semibold text-slate-700 dark:text-slate-200"
       >
         {{ chat.activeConversation.peer.username.slice(0, 1).toUpperCase() }}
       </span>
 
       <div>
-        <p class="font-medium">{{ chat.activeConversation.peer.username }}</p>
-        <p class="text-xs text-slate-500">Chat 1:1</p>
+        <p class="flex items-center gap-2 font-medium">{{ chat.activeConversation.peer.username }}<AccountBadge :provider="chat.activeConversation.peer.authProvider" /></p>
+        <p class="text-xs text-slate-500 dark:text-slate-400">Chat 1:1</p>
       </div>
     </header>
 
-    <div ref="scroller" class="flex-1 space-y-2 overflow-y-auto bg-white px-4 py-4">
-      <p v-if="!chat.activeMessages.length" class="py-10 text-center text-sm text-slate-500">
+    <div ref="scroller" class="flex-1 space-y-2 overflow-y-auto bg-white dark:bg-slate-900 px-4 py-4">
+      <button v-if="chat.nextCursors[chat.activeConversation.id]" type="button" :disabled="loadingEarlier" class="mx-auto block rounded-lg border border-slate-300 px-3 py-1 text-xs dark:border-slate-600" @click="loadEarlier">{{ loadingEarlier ? 'Cargando...' : 'Ver mensajes anteriores' }}</button>
+      <p v-if="!chat.activeMessages.length" class="py-10 text-center text-sm text-slate-500 dark:text-slate-400">
         Todavía no hay mensajes en esta conversación.
       </p>
 
@@ -64,10 +79,11 @@ watch(() => chat.activeMessages.length, scrollToBottom)
 
     <TypingIndicator :active="peerTyping" />
 
-    <MessageComposer :conversation-id="chat.activeConversation.id" />
+    <p v-if="!chat.activeConversation.peer.id" class="border-t border-slate-200 p-3 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">El invitado salió. Sus mensajes se eliminaron; puedes consultar los que tú enviaste.</p>
+    <MessageComposer v-else :key="chat.activeConversation.id" :conversation-id="chat.activeConversation.id" />
   </section>
 
-  <section v-else class="flex flex-1 items-center justify-center bg-white max-md:hidden">
-    <p class="text-sm text-slate-500">Selecciona una conversación para empezar.</p>
+  <section v-else class="flex flex-1 items-center justify-center bg-white dark:bg-slate-900 max-md:hidden">
+    <p class="text-sm text-slate-500 dark:text-slate-400">Selecciona una conversación para empezar.</p>
   </section>
 </template>

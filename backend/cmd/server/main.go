@@ -56,10 +56,34 @@ func main() {
 	hub := ws.NewHub()
 	tickets := ws.NewTicketStore(cfg.WSTicketTTL)
 	websocketHandler := ws.NewHandler(hub, tickets, chatService, cfg.CORSOrigin)
+	websocketHandler.ActiveUser = usersService.IsActive
+	usersHandler.OnGuestDeleted = func(deleted users.DeletedGuest) {
+		hub.Broadcast(ws.OutboundEvent{Type: ws.EventUserRemoved, UserID: deleted.UserID})
+		hub.DisconnectUser(deleted.UserID)
+	}
+	go func() {
+		cleanup := func() {
+			if err := usersService.ExpireGuests(ctx, usersHandler.OnGuestDeleted); err != nil && ctx.Err() == nil {
+				slog.Error("No se pudieron eliminar invitados vencidos", "error", err)
+			}
+		}
+		cleanup()
+		ticker := time.NewTicker(time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				cleanup()
+			}
+		}
+	}()
 
 	router := httpapi.NewRouter(httpapi.Dependencies{
 		Config:         cfg,
-		AuthMiddleware: auth.Middleware(cfg.JWTSecret),
+		AuthMiddleware: auth.Middleware(cfg.JWTSecret, usersService.IsActive),
+		Google:         users.NewGoogleHandler(usersService, cfg),
 		Users:          usersHandler,
 		Chat:           chatHandler,
 		WebSocket:      websocketHandler,
@@ -68,23 +92,36 @@ func main() {
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
 		Handler:           router,
+		TLSConfig:         cfg.TLSConfig(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
+	serverErrors := make(chan error, 1)
 	go func() {
-		slog.Info("servidor escuchando", "addr", cfg.HTTPAddr)
-		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			slog.Error("servidor detenido", "error", err)
-			stop()
+		if cfg.TLSCertFile != "" {
+			slog.Info("servidor HTTPS escuchando", "addr", cfg.HTTPAddr)
+			serverErrors <- server.ListenAndServeTLS(cfg.TLSCertFile, cfg.TLSKeyFile)
+		} else {
+			slog.Info("servidor HTTP escuchando", "addr", cfg.HTTPAddr)
+			serverErrors <- server.ListenAndServe()
 		}
 	}()
-
-	<-ctx.Done()
-
+	var serveError error
+	select {
+	case <-ctx.Done():
+	case serveError = <-serverErrors:
+		if !errors.Is(serveError, http.ErrServerClosed) {
+			slog.Error("servidor detenido", "error", serveError)
+		}
+	}
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	if err := server.Shutdown(shutdownCtx); err != nil {
 		slog.Error("apagado forzado", "error", err)
+	}
+
+	if serveError != nil && !errors.Is(serveError, http.ErrServerClosed) {
+		os.Exit(1)
 	}
 }

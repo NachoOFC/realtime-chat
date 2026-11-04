@@ -3,7 +3,6 @@ import type { Message } from '~/types'
 import { useAuthStore } from '~/stores/auth'
 import { useChatStore } from '~/stores/chat'
 import { useChatSocket } from '~/composables/useChatSocket'
-import { useDemoMode } from '~/composables/useDemoMode'
 
 const props = defineProps<{
   conversationId: string
@@ -12,9 +11,20 @@ const props = defineProps<{
 const auth = useAuthStore()
 const chat = useChatStore()
 const socket = useChatSocket()
-const demoMode = useDemoMode()
 
 const content = ref('')
+let typingTimer: ReturnType<typeof setTimeout> | undefined
+function stopTyping() {
+  clearTimeout(typingTimer)
+  socket.send({ type: 'typing', conversationId: props.conversationId, active: false })
+}
+function announceTyping() {
+  socket.send({ type: 'typing', conversationId: props.conversationId, active: !!content.value.trim() })
+  clearTimeout(typingTimer)
+  typingTimer = setTimeout(stopTyping, 1200)
+}
+onBeforeUnmount(stopTyping)
+watch(() => props.conversationId, () => { clearTimeout(typingTimer); content.value = '' })
 
 function submit() {
   const text = content.value.trim()
@@ -32,16 +42,12 @@ function submit() {
     content: text,
     clientMessageId,
     createdAt: new Date().toISOString(),
-    status: demoMode.value ? 'sent' : 'sending',
+    status: 'sending',
   }
 
+  stopTyping()
   chat.upsertMessage(optimistic)
   content.value = ''
-
-  if (demoMode.value) {
-    chat.updateConversationPreview(optimistic)
-    return
-  }
 
   const sent = socket.send({
     type: 'message.send',
@@ -57,18 +63,20 @@ function submit() {
 </script>
 
 <template>
-  <form class="flex gap-2 border-t border-slate-200 p-3" @submit.prevent="submit">
+  <form class="flex gap-2 border-t border-slate-200 dark:border-slate-700 p-3" @submit.prevent="submit">
     <input
       v-model="content"
+      @input="announceTyping"
+      @blur="stopTyping"
       type="text"
       maxlength="4000"
       autocomplete="off"
       placeholder="Escribe un mensaje"
-      class="min-w-0 flex-1 rounded-full border border-slate-300 px-4 py-2 text-sm outline-none focus:border-slate-500"
+      class="min-w-0 flex-1 rounded-full border border-slate-300 dark:border-slate-600 px-4 py-2 text-sm bg-white dark:bg-slate-900 outline-none focus:border-slate-500 dark:focus:border-sky-400"
     >
     <button
       type="submit"
-      class="rounded-full bg-slate-900 px-5 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
+      class="rounded-full bg-slate-900 dark:bg-sky-600 px-5 py-2 text-sm font-medium text-white transition hover:bg-slate-800 dark:hover:bg-sky-500"
     >
       Enviar
     </button>

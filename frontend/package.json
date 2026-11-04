@@ -4,12 +4,13 @@
   "type": "module",
   "packageManager": "pnpm@12.14.0",
   "scripts": {
-    "dev": "nuxt dev",
+    "dev": "node ../scripts/dev-frontend.cjs",
     "build": "nuxt build",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
-    "typecheck": "nuxt typecheck"
+    "typecheck": "nuxt typecheck",
+    "test": "node --test tests/chat-socket.test.cjs tests/chat-store.test.cjs tests/api-proxy.test.cjs"
   },
   "dependencies": {
     "@pinia/nuxt": "^0.11.3",

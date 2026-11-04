@@ -1,6 +1,6 @@
 # Realtime Chat
 
-Chat 1:1 en tiempo real estilo WhatsApp. Este repositorio contiene la **estructura inicial** del proyecto: frontend, backend, base de datos y configuración local listos para empezar a implementar la lógica.
+Chat 1:1 en tiempo real estilo WhatsApp. Incluye acceso con Google o apodo temporal, conversaciones privadas, persistencia en PostgreSQL, WebSockets y soporte HTTPS/WSS.
 
 ## Stack
 
@@ -12,7 +12,7 @@ Chat 1:1 en tiempo real estilo WhatsApp. Este repositorio contiene la **estructu
 | Base de datos | PostgreSQL 16 + pgx |
 | Deploy | Render |
 
-No se usa Next.js ni React. La autenticación se basa en **cookies HttpOnly**, nunca en `localStorage`.
+No se usa Next.js ni React. Los usuarios pueden entrar con **Google** o con un **apodo de invitado**. La sesión usa una cookie HttpOnly; el acceso de invitado es temporal y sus datos se eliminan al salir.
 
 ## Estructura
 
@@ -65,14 +65,14 @@ realtime-chat/
 - CORS con credenciales limitado a `CORS_ORIGIN`.
 - Contraseñas con bcrypt.
 - Límite de tamaño de mensajes de WebSocket y de cuerpos JSON.
-- Los mensajes se persisten en PostgreSQL antes de emitirse (cuando se implemente el repositorio).
+- Los mensajes se guardan en PostgreSQL antes de emitirse por WebSocket. HTTPS/WSS cifran la conexión; el contenido no tiene cifrado de extremo a extremo.
 
 ## Requisitos
 
 - Go 1.24+
 - Node.js 20+
 - pnpm 9+
-- Docker
+- PostgreSQL local o una base remota como Neon. Docker es opcional.
 
 ## Puesta en marcha
 
@@ -89,13 +89,17 @@ realtime-chat/
 
    ```powershell
    docker compose up -d
-   Get-Content backend/migrations/0001_init.up.sql | docker compose exec -T postgres psql -U chat -d chat
+   Get-ChildItem backend/migrations/*.up.sql | Sort-Object Name | ForEach-Object {
+     Get-Content $_ | docker compose exec -T postgres psql -U chat -d chat
+   }
    ```
 
-   Opción PostgreSQL local (ajusta `DATABASE_URL` en `.env`):
+   Opción sin Docker: PostgreSQL local o Neon (ajusta `DATABASE_URL` en `.env`). Para usar los comandos siguientes, instala `psql` y define también `$env:DATABASE_URL` en esta terminal con la misma conexión; PowerShell no carga `.env` automáticamente:
 
    ```powershell
-   psql $env:DATABASE_URL -f backend/migrations/0001_init.up.sql
+   Get-ChildItem backend/migrations/*.up.sql | Sort-Object Name | ForEach-Object {
+     psql $env:DATABASE_URL -f $_
+   }
    ```
 
 3. Backend:
@@ -125,15 +129,49 @@ realtime-chat/
 
    Adminer: `http://localhost:8081` (sistema `PostgreSQL`, servidor `postgres`).
 
-## Modo demo (sin login)
+## Backend con PM2 (sin Docker)
 
-Para ver la interfaz sin backend ni autenticación, activa:
+PM2 se instala como dependencia del proyecto con `pnpm install`; no necesitas instalarlo globalmente. Los comandos siguientes se ejecutan desde la raíz del repositorio.
 
-```env
-NUXT_PUBLIC_DEMO_MODE=true
+Antes de iniciar, configura `DATABASE_URL` en el `.env` de la raíz y aplica las migraciones a tu PostgreSQL local o remoto. El backend necesita la base de datos para arrancar. Docker queda como alternativa opcional.
+
+```powershell
+pnpm install
+pnpm backend:start
+pnpm backend:status
+pnpm backend:logs
 ```
 
-En este modo el frontend usa un usuario falso y conversaciones de ejemplo. Los mensajes que escribas solo viven en pantalla: no hay WebSocket, base de datos ni tiempo real. Para volver al flujo real, cambia la variable a `false` o elimínala.
+`backend:start` compila Go en `backend/bin/` y ejecuta ese binario con la configuración de `ecosystem.config.cjs`. PM2 inicia una sola instancia, reinicia el proceso si termina y espera 3 segundos entre intentos. Tras 10 reinicios inestables se detiene para evitar un bucle cuando hay una configuración incorrecta o no está disponible PostgreSQL. Revisa los logs, corrige la causa y ejecuta `pnpm backend:restart`.
+
+Para detenerlo o reiniciarlo después de cambiar `.env`:
+
+```powershell
+pnpm backend:stop
+pnpm backend:restart
+```
+
+Para actualizar el código, detén el backend antes de recompilar (Windows bloquea el ejecutable mientras está en uso):
+
+```powershell
+pnpm backend:stop
+pnpm backend:build
+pnpm backend:restart
+```
+
+Comprueba la API en `http://localhost:8080/healthz`. PM2 mantiene el backend en segundo plano cuando cierras la terminal, pero esta configuración no lo inicia automáticamente al reiniciar Windows. Tampoco detecta por sí sola una API bloqueada que mantiene el proceso abierto.
+
+## Acceso con Google o apodo
+
+En `/login` puedes entrar con Google o como invitado con apodo. Google permite recuperar la misma cuenta y su historial; al salir como invitado se eliminan su perfil y sus mensajes. Para entrar necesitas el backend y PostgreSQL con las tres migraciones aplicadas. [Configurar Google y conocer la política de invitados](docs/google-y-invitados.md).
+
+## Chat y TLS
+
+Entra con un apodo y selecciona **Nuevo chat** para buscar otro usuario. Para probar dos sesiones, abre una ventana de incógnito con otro apodo. El chat guarda los mensajes, recupera el historial por páginas, confirma lecturas e indica quién está escribiendo.
+
+- [Configurar Google e invitados temporales](docs/google-y-invitados.md)
+- [Configurar HTTPS/WSS local y en producción](docs/tls.md)
+- [Ejemplo de lo que guarda cada tabla](docs/datos-ejemplo.md)
 
 ## Variables de entorno
 
@@ -158,21 +196,21 @@ En este modo el frontend usa un usuario falso y conversaciones de ejemplo. Los m
 | --- | --- |
 | `NUXT_PUBLIC_API_BASE` | URL del backend (`http://localhost:8080`) |
 | `NUXT_PUBLIC_WS_BASE` | URL WebSocket (`ws://localhost:8080`) |
-| `NUXT_PUBLIC_DEMO_MODE` | `true` muestra la interfaz con datos falsos, sin login |
 
 ## API REST
 
 | Método | Ruta | Estado |
 | --- | --- | --- |
 | `GET` | `/healthz` | Listo |
-| `POST` | `/api/auth/register` | Estructura (repositorio pendiente) |
-| `POST` | `/api/auth/login` | Estructura (repositorio pendiente) |
+| `POST` | `/api/auth/guest` | Listo (apodo, sin correo ni contraseña) |
+| `POST` | `/api/auth/register` | Disponible en API; la interfaz usa apodo |
+| `POST` | `/api/auth/login` | Disponible en API; la interfaz usa apodo |
 | `POST` | `/api/auth/logout` | Listo |
-| `GET` | `/api/me` | Estructura (repositorio pendiente) |
-| `GET` | `/api/users` | Estructura (repositorio pendiente) |
-| `GET` | `/api/conversations` | Estructura (repositorio pendiente) |
-| `POST` | `/api/conversations` | Estructura (repositorio pendiente) |
-| `GET` | `/api/conversations/{id}/messages` | Estructura (repositorio pendiente) |
+| `GET` | `/api/me` | Listo |
+| `GET` | `/api/users` | Listo |
+| `GET` | `/api/conversations` | Listo |
+| `POST` | `/api/conversations` | Listo |
+| `GET` | `/api/conversations/{id}/messages` | Listo, con paginación |
 | `POST` | `/api/ws/ticket` | Listo |
 | `GET` | `/ws?ticket=...` | Listo (conexión y presencia) |
 
@@ -199,33 +237,22 @@ Servidor → cliente:
 - Base de datos con migraciones iniciales.
 - Autenticación JWT + cookies y tickets de WebSocket implementados.
 - Hub de WebSocket con presencia y enrutamiento por conversación.
-- Repositorios de `users` y `chat` son stubs que devuelven `ErrNotImplemented`.
-- UI estilo WhatsApp con datos de ejemplo vacíos; falta conectar la lógica real.
+- Repositorios PostgreSQL de usuarios y chat implementados, con control de participantes, idempotencia y lecturas persistentes.
+- Interfaz conectada al backend con selección de usuarios, historial, indicadores de escritura, presencia y temas claro/oscuro.
 
 ## Próximos pasos
 
-1. Implementar `users.Repository` y `chat.Repository` con pgx.
+1. Ampliar búsqueda de usuarios y paginación de conversaciones.
 2. Aplicar migraciones al arrancar o con una herramienta (`golang-migrate`).
-3. Persistir y emitir mensajes desde `message.send`.
-4. Marcar mensajes como leídos y calcular no leídos.
-5. Tests de integración del hub y de la API.
+3. Reintentar mensajes pendientes después de recuperar la conexión.
+4. Agregar archivos adjuntos.
+5. Ejecutar las pruebas de integración en CI.
 6. Redis Pub/Sub si se despliegan varias instancias.
 
-## Deploy en Render
+## Despliegue en Netlify + Render
 
-### Backend
+El frontend se publica en Netlify y el backend Go en Render. El repositorio incluye `netlify.toml` y `render.yaml` para que cada servicio construya su carpeta. La API HTTP pasa por un proxy de Nuxt en el dominio del frontend; el WebSocket usa la URL pública de Render y un ticket de un solo uso.
 
-- Root directory: `backend`
-- Build: `go build -o server ./cmd/server`
-- Start: `./server`
-- Health check: `/healthz`
-- Variables: las mismas de `.env`, con `COOKIE_SECURE=true` y un `JWT_SECRET` aleatorio.
+Sigue [la guía de despliegue](docs/despliegue.md) para configurar el mismo repositorio en ambos servicios, las variables y el callback de Google. Los archivos `.env.production.example` y `frontend/.env.production.example` son referencias sin credenciales.
 
-### Frontend
-
-- Root directory: `frontend`
-- Build: `pnpm install && pnpm build`
-- Start: `node .output/server/index.mjs`
-- Variables públicas apuntando a las URLs de producción.
-
-Si frontend y backend están en dominios distintos, usar `COOKIE_SAME_SITE=none` y `COOKIE_SECURE=true`. Para máxima seguridad, servirlos bajo el mismo dominio con un proxy inverso.
+En producción, Render y Netlify gestionan HTTPS. Los certificados locales y PM2 se usan solo en los entornos donde los configuraste; Render compila y supervisa el binario Go directamente.

@@ -142,3 +142,25 @@ func (h *Hub) IsOnline(userID string) bool {
 func boolPtr(value bool) *bool {
 	return &value
 }
+
+func (h *Hub) OnlineUserIDs() []string {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	result := make([]string, 0, len(h.users))
+	for id := range h.users {
+		result = append(result, id)
+	}
+	return result
+}
+
+func (h *Hub) DisconnectUser(userID string) {
+	h.mu.RLock()
+	clients := make([]*Client, 0, len(h.users[userID]))
+	for client := range h.users[userID] {
+		clients = append(clients, client)
+	}
+	h.mu.RUnlock()
+	for _, client := range clients {
+		client.conn.Close(4001, "guest session ended")
+	}
+}

@@ -4,11 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"realtime-chat/backend/internal/auth"
 )
+
+var usernamePattern = regexp.MustCompile(`^[\p{L}\p{N}_. -]+$`)
 
 var (
 	ErrInvalidCredentials = errors.New("email o contraseña incorrectos")
@@ -61,6 +65,33 @@ func (s *Service) Register(ctx context.Context, input RegisterInput) (User, stri
 	return user, token, nil
 }
 
+func (s *Service) GuestLogin(ctx context.Context, username string) (User, string, error) {
+	username = normalizeUsername(username)
+
+	switch {
+	case utf8.RuneCountInString(username) < 3 || utf8.RuneCountInString(username) > 20:
+		return User{}, "", fmt.Errorf("%w: el apodo debe tener entre 3 y 20 caracteres", ErrValidation)
+	case !usernamePattern.MatchString(username):
+		return User{}, "", fmt.Errorf("%w: el apodo solo puede tener letras, números, espacios, puntos, guiones y guiones bajos", ErrValidation)
+	}
+
+	user, err := s.repository.CreateGuest(ctx, username, time.Now().Add(s.tokenTTL))
+	if err != nil {
+		return User{}, "", err
+	}
+
+	token, err := auth.IssueToken(s.jwtSecret, user.ID, s.tokenTTL)
+	if err != nil {
+		return User{}, "", err
+	}
+
+	return user, token, nil
+}
+
+func normalizeUsername(username string) string {
+	return strings.Join(strings.Fields(strings.TrimSpace(username)), " ")
+}
+
 func (s *Service) Login(ctx context.Context, input LoginInput) (User, string, error) {
 	email := strings.ToLower(strings.TrimSpace(input.Email))
 	if email == "" || input.Password == "" {
@@ -93,4 +124,41 @@ func (s *Service) FindByID(ctx context.Context, id string) (User, error) {
 
 func (s *Service) List(ctx context.Context, excludeID string) ([]User, error) {
 	return s.repository.List(ctx, excludeID)
+}
+
+func (s *Service) GoogleLogin(ctx context.Context, identity GoogleIdentity) (User, string, error) {
+	if identity.Subject == "" || identity.Email == "" {
+		return User{}, "", ErrInvalidCredentials
+	}
+	user, err := s.repository.FindOrCreateGoogle(ctx, identity)
+	if err != nil {
+		return User{}, "", err
+	}
+	token, err := auth.IssueToken(s.jwtSecret, user.ID, s.tokenTTL)
+	return user, token, err
+}
+func (s *Service) IsActive(ctx context.Context, id string) (bool, error) {
+	return s.repository.IsActive(ctx, id)
+}
+func (s *Service) DeleteGuest(ctx context.Context, id string) (DeletedGuest, error) {
+	return s.repository.DeleteGuest(ctx, id, false)
+}
+func (s *Service) ExpireGuests(ctx context.Context, notify func(DeletedGuest)) error {
+	ids, err := s.repository.ExpiredGuestIDs(ctx)
+	if err != nil {
+		return err
+	}
+	for _, id := range ids {
+		deleted, err := s.repository.DeleteGuest(ctx, id, true)
+		if errors.Is(err, ErrNotFound) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		if notify != nil {
+			notify(deleted)
+		}
+	}
+	return nil
 }

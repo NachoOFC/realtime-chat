@@ -3,10 +3,11 @@ package chat
 import "time"
 
 type Peer struct {
-	ID         string     `json:"id"`
-	Username   string     `json:"username"`
-	AvatarURL  string     `json:"avatarUrl,omitempty"`
-	LastSeenAt *time.Time `json:"lastSeenAt,omitempty"`
+	AuthProvider string     `json:"authProvider"`
+	ID           string     `json:"id"`
+	Username     string     `json:"username"`
+	AvatarURL    string     `json:"avatarUrl,omitempty"`
+	LastSeenAt   *time.Time `json:"lastSeenAt,omitempty"`
 }
 
 type Conversation struct {
@@ -18,6 +19,7 @@ type Conversation struct {
 }
 
 type Message struct {
+	Status          string    `json:"status,omitempty"`
 	ID              string    `json:"id"`
 	ConversationID  string    `json:"conversationId"`
 	SenderID        string    `json:"senderId"`

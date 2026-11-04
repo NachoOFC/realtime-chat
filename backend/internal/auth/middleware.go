@@ -11,7 +11,7 @@ type contextKey string
 
 const userIDKey contextKey = "userID"
 
-func Middleware(secret string) func(http.Handler) http.Handler {
+func Middleware(secret string, activeChecks ...func(context.Context, string) (bool, error)) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			cookie, err := r.Cookie(CookieName)
@@ -26,6 +26,17 @@ func Middleware(secret string) func(http.Handler) http.Handler {
 				return
 			}
 
+			for _, active := range activeChecks {
+				ok, err := active(r.Context(), userID)
+				if err != nil {
+					httputil.Error(w, http.StatusServiceUnavailable, "No se pudo verificar la sesión")
+					return
+				}
+				if !ok {
+					httputil.Error(w, http.StatusUnauthorized, "La sesión ya no está disponible")
+					return
+				}
+			}
 			ctx := context.WithValue(r.Context(), userIDKey, userID)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
@@ -35,4 +46,21 @@ func Middleware(secret string) func(http.Handler) http.Handler {
 func UserID(ctx context.Context) (string, bool) {
 	userID, ok := ctx.Value(userIDKey).(string)
 	return userID, ok && userID != ""
+}
+
+// OriginGuard blocks cross-site mutations even when cookies use SameSite=None.
+// Non-browser clients may omit Origin. Browsers report their origin on unsafe requests.
+func OriginGuard(allowed string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != "GET" && r.Method != "HEAD" && r.Method != "OPTIONS" {
+				origin := r.Header.Get("Origin")
+				if (origin != "" && origin != allowed) || (origin == "" && r.Header.Get("Sec-Fetch-Site") == "cross-site") {
+					httputil.Error(w, http.StatusForbidden, "Origen no permitido")
+					return
+				}
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }

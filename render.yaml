@@ -1,0 +1,41 @@
+services:
+  - type: web
+    name: realtime-chat-api
+    runtime: go
+    rootDir: backend
+    plan: free
+    numInstances: 1
+    buildCommand: go build -trimpath -ldflags="-s -w" -o server ./cmd/server
+    startCommand: ./server
+    healthCheckPath: /healthz
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CORS_ORIGIN
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REDIRECT_URL
+        sync: false
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: COOKIE_SAME_SITE
+        value: lax
+      - key: COOKIE_DOMAIN
+        value: ""
+      - key: TLS_CERT_FILE
+        value: ""
+      - key: TLS_KEY_FILE
+        value: ""
+      - key: ACCESS_TOKEN_TTL
+        value: 24h
+      - key: WS_TICKET_TTL
+        value: 30s

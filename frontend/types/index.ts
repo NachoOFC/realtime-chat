@@ -1,4 +1,5 @@
 export interface User {
+  authProvider?: 'google' | 'guest' | 'password'
   id: string
   email?: string
   username: string
@@ -54,6 +55,8 @@ export type ClientEvent =
     }
 
 export type ServerEvent =
+  | { type: 'user.removed'; userId: string }
+  | { type: 'auth.expired' }
   | { type: 'message.new'; message: Message }
   | {
       type: 'message.ack'

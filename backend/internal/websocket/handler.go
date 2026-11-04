@@ -15,6 +15,7 @@ import (
 const maxMessageBytes = 32 * 1024
 
 type Handler struct {
+	ActiveUser    func(context.Context, string) (bool, error)
 	hub           *Hub
 	tickets       *TicketStore
 	chat          *chat.Service
@@ -48,6 +49,13 @@ func (h *Handler) ServeWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if h.ActiveUser != nil {
+		active, err := h.ActiveUser(r.Context(), userID)
+		if err != nil || !active {
+			httputil.Error(w, http.StatusUnauthorized, "La sesión ya no está disponible")
+			return
+		}
+	}
 	conn, err := websocket.Accept(w, r, h.acceptOptions())
 	if err != nil {
 		slog.Warn("no se pudo aceptar websocket", "error", err)
@@ -59,6 +67,9 @@ func (h *Handler) ServeWS(w http.ResponseWriter, r *http.Request) {
 
 	client := NewClient(userID, conn, h.hub)
 	h.hub.Register(client)
+	for _, id := range h.hub.OnlineUserIDs() {
+		client.Send(OutboundEvent{Type: EventPresence, UserID: id, Online: boolPtr(true)})
+	}
 	defer h.hub.Unregister(client)
 
 	go client.WriteLoop(r.Context())
@@ -98,7 +109,7 @@ func (h *Handler) handleEvent(ctx context.Context, client *Client, event Inbound
 			ClientMessageID: event.ClientMessageID,
 			Message:         &message,
 		})
-		h.hub.SendToConversation(message.ConversationID, OutboundEvent{
+		h.sendToMembers(ctx, client.UserID, message.ConversationID, OutboundEvent{
 			Type:           EventMessageNew,
 			ConversationID: message.ConversationID,
 			Message:        &message,
@@ -116,10 +127,11 @@ func (h *Handler) handleEvent(ctx context.Context, client *Client, event Inbound
 		})
 
 	case EventMessageRead:
-		if !h.requireMembership(ctx, client, event.ConversationID) {
+		if err := h.chat.MarkRead(ctx, client.UserID, event.ConversationID, event.MessageID); err != nil {
+			client.Send(OutboundEvent{Type: EventError, Error: "No se pudo marcar el mensaje como leído"})
 			return
 		}
-		h.hub.SendToConversation(event.ConversationID, OutboundEvent{
+		h.sendToMembers(ctx, client.UserID, event.ConversationID, OutboundEvent{
 			Type:           EventMessageRead,
 			ConversationID: event.ConversationID,
 			UserID:         client.UserID,
@@ -151,4 +163,14 @@ func (h *Handler) acceptOptions() *websocket.AcceptOptions {
 	}
 
 	return &websocket.AcceptOptions{OriginPatterns: []string{parsed.Host}}
+}
+
+func (h *Handler) sendToMembers(ctx context.Context, userID, conversationID string, event OutboundEvent) {
+	ids, err := h.chat.MemberIDs(ctx, userID, conversationID)
+	if err != nil {
+		return
+	}
+	for _, id := range ids {
+		h.hub.SendToUser(id, event)
+	}
 }

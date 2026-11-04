@@ -1,12 +1,10 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import type { User } from '~/types'
+import { useChatStore } from '~/stores/chat'
 import { useApi } from '~/composables/useApi'
-import { useDemoMode } from '~/composables/useDemoMode'
-import { demoUser } from '~/utils/demo'
 
 export const useAuthStore = defineStore('auth', () => {
-  const demoMode = useDemoMode()
   const user = ref<User | null>(null)
   const loading = ref(false)
   const initialized = ref(false)
@@ -20,11 +18,6 @@ export const useAuthStore = defineStore('auth', () => {
 
     initialized.value = true
 
-    if (demoMode.value) {
-      user.value = { ...demoUser }
-      return
-    }
-
     try {
       user.value = await useApi<User>('/api/me')
     } catch {
@@ -32,13 +25,13 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  async function login(email: string, password: string) {
+  async function enterAsGuest(username: string) {
     loading.value = true
 
     try {
-      user.value = await useApi<User>('/api/auth/login', {
+      user.value = await useApi<User>('/api/auth/guest', {
         method: 'POST',
-        body: { email, password },
+        body: { username },
       })
       initialized.value = true
       return user.value
@@ -47,34 +40,15 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  async function register(email: string, username: string, password: string) {
-    loading.value = true
-
-    try {
-      user.value = await useApi<User>('/api/auth/register', {
-        method: 'POST',
-        body: { email, username, password },
-      })
-      initialized.value = true
-      return user.value
-    } finally {
-      loading.value = false
-    }
+  function clearSession() {
+    user.value = null
+    initialized.value = true
+    useChatStore().reset()
   }
-
   async function logout() {
-    if (demoMode.value) {
-      user.value = { ...demoUser }
-      return
-    }
-
-    try {
-      await useApi('/api/auth/logout', { method: 'POST' })
-    } finally {
-      user.value = null
-      initialized.value = true
-      await navigateTo('/login')
-    }
+    await useApi('/api/auth/logout', { method: 'POST' })
+    clearSession()
+    await navigateTo('/login')
   }
 
   return {
@@ -83,8 +57,8 @@ export const useAuthStore = defineStore('auth', () => {
     initialized,
     isAuthenticated,
     ensureSession,
-    login,
-    register,
+    enterAsGuest,
     logout,
+    clearSession,
   }
 })

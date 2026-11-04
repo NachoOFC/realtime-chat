@@ -4,6 +4,7 @@ go 1.24.0
 
 require (
 	github.com/coder/websocket v1.8.15
+	github.com/coreos/go-oidc/v3 v3.14.1
 	github.com/go-chi/chi/v5 v5.5.0
 	github.com/go-chi/cors v1.2.2
 	github.com/golang-jwt/jwt/v5 v5.3.1
@@ -11,9 +12,11 @@ require (
 	github.com/jackc/pgx/v5 v5.8.0
 	github.com/joho/godotenv v1.5.1
 	golang.org/x/crypto v0.45.0
+	golang.org/x/oauth2 v0.30.0
 )
 
 require (
+	github.com/go-jose/go-jose/v4 v4.0.5 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
