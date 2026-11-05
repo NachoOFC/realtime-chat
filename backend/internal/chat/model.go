@@ -11,6 +11,9 @@ type Peer struct {
 }
 
 type Conversation struct {
+	Kind        string    `json:"kind"`
+	Name        string    `json:"name,omitempty"`
+	Members     []Peer    `json:"members,omitempty"`
 	ID          string    `json:"id"`
 	Peer        Peer      `json:"peer"`
 	LastMessage *Message  `json:"lastMessage,omitempty"`
@@ -19,6 +22,7 @@ type Conversation struct {
 }
 
 type Message struct {
+	SenderName      string    `json:"senderName,omitempty"`
 	Status          string    `json:"status,omitempty"`
 	ID              string    `json:"id"`
 	ConversationID  string    `json:"conversationId"`
@@ -35,4 +39,13 @@ type MessagePage struct {
 
 type CreateConversationInput struct {
 	PeerID string `json:"peerId"`
+}
+
+type CreateGroupInput struct {
+	Name      string   `json:"name"`
+	MemberIDs []string `json:"memberIds"`
+}
+
+type AddGroupMembersInput struct {
+	MemberIDs []string `json:"memberIds"`
 }

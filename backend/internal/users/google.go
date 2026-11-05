@@ -5,6 +5,7 @@ import (
 	"crypto/subtle"
 	"errors"
 	"net/http"
+	"net/mail"
 	"net/url"
 	"time"
 
@@ -113,7 +114,20 @@ func (h *GoogleHandler) Start(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{Name: googleFlowCookie, Value: signed, Path: "/api/auth/google", Domain: h.cfg.CookieDomain, HttpOnly: true, Secure: h.cfg.CookieSecure, SameSite: http.SameSiteLaxMode, MaxAge: int(flowLifetime.Seconds())})
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Referrer-Policy", "no-referrer")
-	http.Redirect(w, r, h.Provider.AuthorizationURL(flow.State, flow.Nonce, flow.Verifier), http.StatusFound)
+	target, err := url.Parse(h.Provider.AuthorizationURL(flow.State, flow.Nonce, flow.Verifier))
+	if err != nil {
+		httputil.Error(w, http.StatusInternalServerError, "No se pudo iniciar Google")
+		return
+	}
+	if hint := r.URL.Query().Get("login_hint"); r.URL.Query().Get("account") == "recent" && len(hint) <= 254 {
+		if address, err := mail.ParseAddress(hint); err == nil && address.Address == hint {
+			query := target.Query()
+			query.Set("login_hint", hint)
+			query.Del("prompt")
+			target.RawQuery = query.Encode()
+		}
+	}
+	http.Redirect(w, r, target.String(), http.StatusFound)
 }
 func (h *GoogleHandler) redirect(w http.ResponseWriter, r *http.Request, path, reason string) {
 	target := h.cfg.FrontendURL + path

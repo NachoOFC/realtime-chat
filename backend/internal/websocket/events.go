@@ -5,16 +5,17 @@ import "realtime-chat/backend/internal/chat"
 type EventType string
 
 const (
-	EventConversationJoin  EventType = "conversation.join"
-	EventConversationLeave EventType = "conversation.leave"
-	EventMessageSend       EventType = "message.send"
-	EventMessageNew        EventType = "message.new"
-	EventMessageAck        EventType = "message.ack"
-	EventMessageRead       EventType = "message.read"
-	EventTyping            EventType = "typing"
-	EventPresence          EventType = "presence"
-	EventUserRemoved       EventType = "user.removed"
-	EventError             EventType = "error"
+	EventConversationJoin    EventType = "conversation.join"
+	EventConversationLeave   EventType = "conversation.leave"
+	EventConversationUpdated EventType = "conversation.updated"
+	EventMessageSend         EventType = "message.send"
+	EventMessageNew          EventType = "message.new"
+	EventMessageAck          EventType = "message.ack"
+	EventMessageRead         EventType = "message.read"
+	EventTyping              EventType = "typing"
+	EventPresence            EventType = "presence"
+	EventUserRemoved         EventType = "user.removed"
+	EventError               EventType = "error"
 )
 
 type InboundEvent struct {

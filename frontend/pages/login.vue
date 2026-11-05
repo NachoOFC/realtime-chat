@@ -7,6 +7,7 @@ const route = useRoute()
 const username = ref('')
 const errorMessage = ref<string | null>(null)
 const googleLoading = ref(false)
+onMounted(() => auth.loadRecentAccount())
 const { data: providers } = await useAsyncData('auth-providers', () => useApi<{ google: boolean }>('/api/auth/providers'), { default: () => ({ google: false }) })
 const oauthMessage = computed(() => {
   const messages: Record<string, string> = {
@@ -18,10 +19,15 @@ const oauthMessage = computed(() => {
   }
   return typeof route.query.authError === 'string' ? messages[route.query.authError] : undefined
 })
-function continueWithGoogle() {
+function continueWithGoogle(recent = false) {
   if (!providers.value.google || googleLoading.value) return
   googleLoading.value = true
-  window.location.assign(new URL('/api/auth/google', config.public.apiBase || window.location.origin).href)
+  const url = new URL('/api/auth/google', config.public.apiBase || window.location.origin)
+  if (recent && auth.recentAccount) {
+    url.searchParams.set('account', 'recent')
+    url.searchParams.set('login_hint', auth.recentAccount.email)
+  }
+  window.location.assign(url.href)
 }
 async function submit() {
   errorMessage.value = null
@@ -39,18 +45,26 @@ function readError(error: unknown) {
 
 <template>
   <section class="mx-auto flex w-full max-w-md flex-1 flex-col justify-center py-10">
-    <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-      <h1 class="text-2xl font-semibold tracking-tight">Entra al chat</h1>
-      <p class="mt-2 text-sm text-slate-600 dark:text-slate-300">Con Google puedes volver a tu cuenta y conservar tus conversaciones.</p>
-      <button type="button" :disabled="!providers.google || googleLoading" class="mt-5 flex w-full items-center justify-center gap-3 rounded-lg border border-slate-300 bg-white px-4 py-2.5 font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50" @click="continueWithGoogle">
+    <div class="rounded-lg border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-900">
+      <h1 class="text-xl font-semibold">Inicia sesión</h1>
+      <p class="mt-2 text-sm text-slate-600 dark:text-slate-300">Entra con Google para conservar tus chats.</p>
+      <div v-if="auth.recentAccount" class="relative mt-5 border-y border-slate-200 py-3 dark:border-slate-700">
+        <button type="button" :disabled="!providers.google || googleLoading" class="flex w-full items-center gap-3 py-2 pr-8 text-left disabled:opacity-50" @click="continueWithGoogle(true)">
+          <span class="flex size-10 shrink-0 items-center justify-center rounded-full bg-slate-100 font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-200">{{ auth.recentAccount.username.slice(0, 1).toUpperCase() }}</span>
+          <span class="min-w-0"><span class="block truncate text-sm font-medium">Continuar como {{ auth.recentAccount.username }}</span><span class="block truncate text-xs text-slate-500 dark:text-slate-400">{{ auth.recentAccount.email }}</span></span>
+        </button>
+        <button type="button" class="absolute right-0 top-5 rounded px-2 py-1 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Olvidar esta cuenta en este navegador" title="Olvidar cuenta" @click="auth.forgetRecentAccount()">×</button>
+        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Cuenta recordada en este navegador.</p>
+      </div>
+      <button type="button" :disabled="!providers.google || googleLoading" class="mt-5 flex w-full items-center justify-center gap-3 rounded-md border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50" @click="continueWithGoogle(false)">
         <svg aria-hidden="true" viewBox="0 0 24 24" class="size-5"><path fill="#4285F4" d="M21.6 12.23c0-.71-.06-1.39-.18-2.05H12v3.88h5.38a4.6 4.6 0 0 1-1.99 3.02v2.51h3.23c1.89-1.74 2.98-4.31 2.98-7.36Z"/><path fill="#34A853" d="M12 22c2.7 0 4.96-.9 6.62-2.41l-3.23-2.51c-.9.6-2.04.97-3.39.97-2.6 0-4.81-1.76-5.6-4.12H3.06v2.59A10 10 0 0 0 12 22Z"/><path fill="#FBBC05" d="M6.4 13.93a6 6 0 0 1 0-3.86V7.48H3.06a10 10 0 0 0 0 9.04l3.34-2.59Z"/><path fill="#EA4335" d="M12 5.95c1.47 0 2.79.51 3.82 1.5l2.86-2.87A9.6 9.6 0 0 0 12 2a10 10 0 0 0-8.94 5.48l3.34 2.59C7.19 7.71 9.4 5.95 12 5.95Z"/></svg>
-        {{ googleLoading ? 'Abriendo Google...' : 'Continuar con Google' }}
+        {{ googleLoading ? 'Abriendo Google...' : auth.recentAccount ? 'Usar otra cuenta de Google' : 'Continuar con Google' }}
       </button>
       <p v-if="!providers.google" class="mt-2 text-xs text-slate-500 dark:text-slate-400">Google aún no está disponible. Puedes entrar como invitado.</p>
       <p v-if="oauthMessage" role="alert" class="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{{ oauthMessage }}</p>
-      <div class="my-6 flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400"><span class="h-px flex-1 bg-slate-200 dark:bg-slate-700" />o entra como invitado<span class="h-px flex-1 bg-slate-200 dark:bg-slate-700" /></div>
-      <h2 class="text-lg font-semibold">Elige tu apodo</h2>
-      <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Sin correo ni contraseña. Podrás hablar con todos y ver quién está conectado.</p>
+      <div class="my-6 border-t border-slate-200 dark:border-slate-700" />
+      <h2 class="text-base font-medium">Entrar como invitado</h2>
+      <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Solo necesitas un apodo.</p>
       <form class="mt-4 space-y-4" @submit.prevent="submit">
         <div>
           <label for="username" class="text-sm font-medium text-slate-700 dark:text-slate-200">Apodo de invitado</label>
@@ -59,7 +73,7 @@ function readError(error: unknown) {
         <p v-if="errorMessage" role="alert" class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{{ errorMessage }}</p>
         <button type="submit" :disabled="auth.loading" class="w-full rounded-lg bg-slate-900 px-4 py-2 font-medium text-white transition hover:bg-slate-800 disabled:opacity-50 dark:bg-sky-600 dark:hover:bg-sky-500">{{ auth.loading ? 'Entrando...' : 'Entrar como invitado' }}</button>
       </form>
-      <p class="mt-4 rounded-lg bg-amber-50 p-3 text-xs leading-relaxed text-amber-900 dark:bg-amber-950 dark:text-amber-200"><strong>El acceso de invitado es temporal.</strong> Al pulsar «Salir» se eliminan tu perfil y los mensajes que enviaste, también del historial de otras personas. No podrás recuperarlos. Si abandonas la sesión, se eliminarán al vencer tu acceso.</p>
+      <p class="mt-4 text-xs leading-relaxed text-slate-500 dark:text-slate-400">Al salir como invitado se eliminan tu perfil y tus mensajes, también del historial de otras personas. No podrás recuperarlos. Si cierras el navegador, se eliminarán al vencer el acceso.</p>
     </div>
   </section>
 </template>

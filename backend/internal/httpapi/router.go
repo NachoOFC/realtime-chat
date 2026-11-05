@@ -91,6 +91,9 @@ func NewRouter(deps Dependencies) http.Handler {
 			router.Route("/conversations", func(router chi.Router) {
 				router.Get("/", deps.Chat.ListConversations)
 				router.Post("/", deps.Chat.CreateConversation)
+				router.Post("/groups", deps.Chat.CreateGroup)
+				router.Post("/{id}/members", deps.Chat.AddGroupMembers)
+				router.Delete("/{id}/members/me", deps.Chat.LeaveGroup)
 				router.Get("/{id}/messages", deps.Chat.ListMessages)
 			})
 		})

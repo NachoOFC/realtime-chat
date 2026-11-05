@@ -40,7 +40,7 @@ func TestGoogleAccountsAndGuestCleanup(t *testing.T) {
 	if err != nil {
 		t.Fatal("invalid database configuration")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 	admin, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
@@ -72,7 +72,7 @@ func TestGoogleAccountsAndGuestCleanup(t *testing.T) {
 	if err = pool.QueryRow(ctx, "SELECT current_schema()").Scan(&selected); err != nil || selected != schema {
 		t.Fatal("refusing to use an unisolated schema")
 	}
-	for _, name := range []string{"0001_init.up.sql", "0002_guest_users.up.sql", "0003_google_and_temporary_guests.up.sql"} {
+	for _, name := range []string{"0001_init.up.sql", "0002_guest_users.up.sql", "0003_google_and_temporary_guests.up.sql", "0004_group_conversations.up.sql"} {
 		data, err := os.ReadFile(filepath.Join("../../migrations", name))
 		if err != nil {
 			t.Fatal(err)
@@ -264,7 +264,130 @@ func TestGoogleAccountsAndGuestCleanup(t *testing.T) {
 			t.Fatal("guest cookie persists on disk")
 		}
 	}
-	t.Log("Google identity recovery, guest expiration, deletion, closed chat history and cookie policy verified")
+	t.Run("groups isolate members and survive guest cleanup", func(t *testing.T) {
+		second, _, err := service.GoogleLogin(ctx, GoogleIdentity{Subject: "group-second", Email: "group-second@example.test", Name: "Segunda"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		third, _, err := service.GoogleLogin(ctx, GoogleIdentity{Subject: "group-third", Email: "group-third@example.test", Name: "Tercera"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		temporary, _, err := service.GuestLogin(ctx, "GroupGuest")
+		if err != nil {
+			t.Fatal(err)
+		}
+		group, err := chats.CreateGroup(ctx, account.ID, "Amigos", []string{second.ID, temporary.ID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if group.Kind != "group" || group.Name != "Amigos" || len(group.Members) != 3 {
+			t.Fatal("incorrect group metadata", group)
+		}
+		for _, member := range group.Members {
+			if member.AuthProvider == "" {
+				t.Fatal("missing member provider")
+			}
+		}
+		if _, err = chats.ListMessages(ctx, third.ID, group.ID, "", 30); !errors.Is(err, chat.ErrForbidden) {
+			t.Fatal("outsider can read", err)
+		}
+		if _, err = chats.SendMessage(ctx, third.ID, group.ID, uuid.NewString(), "No"); !errors.Is(err, chat.ErrForbidden) {
+			t.Fatal("outsider can send", err)
+		}
+		if _, err = chats.AddGroupMembers(ctx, third.ID, group.ID, []string{account.ID}); !errors.Is(err, chat.ErrForbidden) {
+			t.Fatal("outsider can invite", err)
+		}
+		if _, err = chats.LeaveGroup(ctx, third.ID, group.ID); !errors.Is(err, chat.ErrForbidden) {
+			t.Fatal("outsider can change membership", err)
+		}
+		stored, err := chats.SendMessage(ctx, second.ID, group.ID, uuid.NewString(), "Hola grupo")
+		if err != nil || stored.SenderName != second.Username {
+			t.Fatal("missing group message author", err)
+		}
+		page, err := chats.ListMessages(ctx, account.ID, group.ID, "", 30)
+		if err != nil || len(page.Messages) != 1 || page.Messages[0].SenderName != second.Username {
+			t.Fatal("group history", err)
+		}
+		updated, err := chats.AddGroupMembers(ctx, account.ID, group.ID, []string{third.ID})
+		if err != nil || len(updated.Members) != 4 {
+			t.Fatal("could not invite", err)
+		}
+		if _, err = chats.ListMessages(ctx, third.ID, group.ID, "", 30); err != nil {
+			t.Fatal("invited member cannot read", err)
+		}
+		if _, err = chats.SendMessage(ctx, temporary.ID, group.ID, uuid.NewString(), "Temporal"); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = service.DeleteGuest(ctx, temporary.ID); err != nil {
+			t.Fatal(err)
+		}
+		page, err = chats.ListMessages(ctx, account.ID, group.ID, "", 30)
+		if err != nil || len(page.Messages) != 1 || page.Messages[0].ID != stored.ID {
+			t.Fatal("guest cleanup removed another group member's message", err)
+		}
+		list, err := chats.ListConversations(ctx, account.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		count := 0
+		for _, c := range list {
+			if c.ID == group.ID {
+				count++
+				if len(c.Members) != 3 {
+					t.Fatal("deleted guest still listed")
+				}
+			}
+		}
+		if count != 1 {
+			t.Fatal("duplicate or missing group rows", count)
+		}
+		if _, err = chats.LeaveGroup(ctx, second.ID, group.ID); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = chats.ListMessages(ctx, second.ID, group.ID, "", 30); !errors.Is(err, chat.ErrForbidden) {
+			t.Fatal("former member can read", err)
+		}
+		if _, err = chats.SendMessage(ctx, second.ID, group.ID, uuid.NewString(), "No"); !errors.Is(err, chat.ErrForbidden) {
+			t.Fatal("former member can send", err)
+		}
+		page, err = chats.ListMessages(ctx, account.ID, group.ID, "", 30)
+		if err != nil || page.Messages[0].SenderName != second.Username {
+			t.Fatal("former member's author name lost", err)
+		}
+		emptyGuest, _, err := service.GuestLogin(ctx, "EmptyGroupGuest")
+		if err != nil {
+			t.Fatal(err)
+		}
+		emptyGroup, err := chats.CreateGroup(ctx, account.ID, "Vacío", []string{emptyGuest.ID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = service.DeleteGuest(ctx, emptyGuest.ID); err != nil {
+			t.Fatal(err)
+		}
+		list, err = chats.ListConversations(ctx, account.ID)
+		if err != nil || !hasConversation(list, emptyGroup.ID) {
+			t.Fatal("empty group was deleted with a guest", err)
+		}
+		if _, err = chats.SendMessage(ctx, account.ID, emptyGroup.ID, uuid.NewString(), "Sigo aquí"); err != nil {
+			t.Fatal("single remaining group member cannot write", err)
+		}
+		if _, err = chats.LeaveGroup(ctx, account.ID, emptyGroup.ID); err != nil {
+			t.Fatal(err)
+		}
+		var exists bool
+		if err = pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM conversations WHERE id=$1)`, emptyGroup.ID).Scan(&exists); err != nil || exists {
+			t.Fatal("empty group remains after its last member leaves", err)
+		}
+		if _, err = chats.CreateGroup(ctx, account.ID, "", []string{third.ID}); !errors.Is(err, chat.ErrValidation) {
+			t.Fatal("accepted empty group name", err)
+		}
+		if _, err = chats.CreateGroup(ctx, account.ID, "Duplicados", []string{third.ID, third.ID}); !errors.Is(err, chat.ErrValidation) {
+			t.Fatal("accepted duplicate members", err)
+		}
+	})
+	t.Log("Google recovery, guest cleanup, groups and membership boundaries verified")
 }
 
 func hasConversation(conversations []chat.Conversation, id string) bool {

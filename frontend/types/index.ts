@@ -10,6 +10,7 @@ export interface User {
 }
 
 export interface Message {
+	senderName?: string
   id: string
   conversationId: string
   senderId: string
@@ -20,6 +21,9 @@ export interface Message {
 }
 
 export interface Conversation {
+  kind?: 'direct' | 'group'
+  name?: string
+  members?: User[]
   id: string
   peer: User
   lastMessage?: Message
@@ -55,6 +59,7 @@ export type ClientEvent =
     }
 
 export type ServerEvent =
+  | { type: 'conversation.updated'; conversationId: string }
   | { type: 'user.removed'; userId: string }
   | { type: 'auth.expired' }
   | { type: 'message.new'; message: Message }

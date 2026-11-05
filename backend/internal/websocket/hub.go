@@ -92,6 +92,20 @@ func (h *Hub) LeaveConversation(client *Client, conversationID string) {
 	}
 }
 
+func (h *Hub) RemoveUserFromConversation(userID, conversationID string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	clients := h.rooms[conversationID]
+	for client := range clients {
+		if client.UserID == userID {
+			delete(clients, client)
+		}
+	}
+	if len(clients) == 0 {
+		delete(h.rooms, conversationID)
+	}
+}
+
 func (h *Hub) SendToConversation(conversationID string, event OutboundEvent) {
 	h.mu.RLock()
 	clients := make([]*Client, 0, len(h.rooms[conversationID]))
