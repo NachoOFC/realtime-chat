@@ -11,7 +11,75 @@ import (
 )
 
 type Handler struct {
-	service *Service
+	service   *Service
+	OnChanged func(conversationID string, userIDs []string, removedUserID string)
+}
+
+func (h *Handler) notifyGroup(c Conversation) {
+	if h.OnChanged == nil {
+		return
+	}
+	ids := make([]string, 0, len(c.Members))
+	for _, member := range c.Members {
+		ids = append(ids, member.ID)
+	}
+	h.OnChanged(c.ID, ids, "")
+}
+
+func (h *Handler) CreateGroup(w http.ResponseWriter, r *http.Request) {
+	actor, ok := auth.UserID(r.Context())
+	if !ok {
+		httputil.Error(w, 401, "No autenticado")
+		return
+	}
+	var input CreateGroupInput
+	if !httputil.ReadJSON(w, r, &input) {
+		return
+	}
+	c, err := h.service.CreateGroup(r.Context(), actor, input.Name, input.MemberIDs)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	h.notifyGroup(c)
+	httputil.WriteJSON(w, http.StatusCreated, c)
+}
+
+func (h *Handler) AddGroupMembers(w http.ResponseWriter, r *http.Request) {
+	actor, ok := auth.UserID(r.Context())
+	if !ok {
+		httputil.Error(w, 401, "No autenticado")
+		return
+	}
+	var input AddGroupMembersInput
+	if !httputil.ReadJSON(w, r, &input) {
+		return
+	}
+	c, err := h.service.AddGroupMembers(r.Context(), actor, chi.URLParam(r, "id"), input.MemberIDs)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	h.notifyGroup(c)
+	httputil.WriteJSON(w, http.StatusOK, c)
+}
+
+func (h *Handler) LeaveGroup(w http.ResponseWriter, r *http.Request) {
+	actor, ok := auth.UserID(r.Context())
+	if !ok {
+		httputil.Error(w, 401, "No autenticado")
+		return
+	}
+	id := chi.URLParam(r, "id")
+	ids, err := h.service.LeaveGroup(r.Context(), actor, id)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if h.OnChanged != nil {
+		h.OnChanged(id, ids, actor)
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func NewHandler(service *Service) *Handler {

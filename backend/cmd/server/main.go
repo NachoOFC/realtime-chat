@@ -55,6 +55,14 @@ func main() {
 	chatHandler := chat.NewHandler(chatService)
 
 	hub := ws.NewHub()
+	chatHandler.OnChanged = func(id string, userIDs []string, removedUserID string) {
+		if removedUserID != "" {
+			hub.RemoveUserFromConversation(removedUserID, id)
+		}
+		for _, userID := range userIDs {
+			hub.SendToUser(userID, ws.OutboundEvent{Type: ws.EventConversationUpdated, ConversationID: id})
+		}
+	}
 	tickets := ws.NewTicketStore(cfg.WSTicketTTL)
 	websocketHandler := ws.NewHandler(hub, tickets, chatService, cfg.CORSOrigin)
 	websocketHandler.ActiveUser = usersService.IsActive

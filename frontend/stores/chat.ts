@@ -73,6 +73,48 @@ export const useChatStore = defineStore('chat', () => {
     if (id === ASSISTANT_CONVERSATION_ID) return
     if (!loadedHistories.value[id]) await loadMessages(id)
   }
+  function replaceGroup(conversation: Conversation) {
+    conversationsRequest++
+    loadingConversations.value = false
+    const index = conversations.value.findIndex(item => item.id === conversation.id)
+    if (index < 0) conversations.value.unshift(conversation)
+    else conversations.value[index] = conversation
+  }
+  function groupError(error: unknown, fallback: string) {
+    const message = (error as { data?: { error?: string } })?.data?.error
+    return typeof message === 'string' ? message : fallback
+  }
+  async function createGroup(name: string, memberIds: string[]) {
+    const epoch = sessionEpoch
+    try {
+      const group = await useApi<Conversation>('/api/conversations/groups', { method: 'POST', body: { name, memberIds } })
+      if (epoch !== sessionEpoch) return false
+      replaceGroup(group)
+      await selectConversation(group.id)
+      return epoch === sessionEpoch
+    } catch (error) { if (epoch === sessionEpoch) errorMessage.value = groupError(error, 'No se pudo crear el grupo.'); return false }
+  }
+  async function addGroupMembers(id: string, memberIds: string[]) {
+    const epoch = sessionEpoch
+    try {
+      const group = await useApi<Conversation>(`/api/conversations/${id}/members`, { method: 'POST', body: { memberIds } })
+      if (epoch !== sessionEpoch) return false
+      replaceGroup(group)
+      return true
+    } catch (error) { if (epoch === sessionEpoch) errorMessage.value = groupError(error, 'No se pudieron agregar las personas.'); return false }
+  }
+  async function leaveGroup(id: string) {
+    const epoch = sessionEpoch
+    try {
+      await useApi(`/api/conversations/${id}/members/me`, { method: 'DELETE' })
+      if (epoch !== sessionEpoch) return false
+      conversationsRequest++
+      loadingConversations.value = false
+      conversations.value = conversations.value.filter(item => item.id !== id)
+      discardConversation(id)
+      return true
+    } catch (error) { if (epoch === sessionEpoch) errorMessage.value = groupError(error, 'No se pudo salir del grupo.'); return false }
+  }
   async function loadMessages(id: string, before?: string) {
     if (id === ASSISTANT_CONVERSATION_ID) return
     if (loadingMessages.value[id]) return
@@ -172,6 +214,6 @@ export const useChatStore = defineStore('chat', () => {
   function clearError() { errorMessage.value = null }
   return { conversations, users, onlineUsers, activeConversationId, messages, nextCursors, loadingMessages, typingByConversation,
     loadingConversations, loadingUsers, errorMessage, activeConversation, activeMessages, activeTypingUsers,
-    loadConversations, loadUsers, startConversation, selectConversation, loadMessages, upsertMessage, confirmMessage,
+    loadConversations, loadUsers, startConversation, createGroup, addGroupMembers, leaveGroup, selectConversation, loadMessages, upsertMessage, confirmMessage,
     setTyping, updateConversationPreview, markRead, invalidateHistories, reset, clearError }
 })

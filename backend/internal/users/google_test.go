@@ -109,6 +109,31 @@ func TestGoogleAuthorizationPKCE(t *testing.T) {
 		t.Fatal("incorrect OAuth request")
 	}
 }
+func TestGoogleRecentAccountHintStillUsesOAuth(t *testing.T) {
+	cfg := config.Config{JWTSecret: "test-secret", GoogleClientID: "client", GoogleClientSecret: "secret", GoogleRedirectURL: "https://frontend.test/api/auth/google/callback", CookieSecure: true}
+	handler := NewGoogleHandler(nil, cfg)
+	handler.Provider = newGoogleProvider(cfg)
+	for _, test := range []struct{ query, hint, prompt string }{
+		{"?account=recent&login_hint=person%40example.test", "person@example.test", ""},
+		{"?login_hint=person%40example.test", "", "select_account"},
+		{"?account=recent&login_hint=invalid", "", "select_account"},
+		{"?account=recent&login_hint=Name%20%3Cperson%40example.test%3E", "", "select_account"},
+	} {
+		out := httptest.NewRecorder()
+		handler.Start(out, httptest.NewRequest("GET", "https://frontend.test/api/auth/google"+test.query, nil))
+		target, err := url.Parse(out.Header().Get("Location"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		q := target.Query()
+		if out.Code != 302 || q.Get("login_hint") != test.hint || q.Get("prompt") != test.prompt || q.Get("state") == "" || q.Get("nonce") == "" || q.Get("code_challenge") == "" {
+			t.Fatal("incorrect returning-account OAuth flow")
+		}
+		if len(out.Result().Cookies()) != 1 || !out.Result().Cookies()[0].HttpOnly {
+			t.Fatal("returning account lost OAuth flow protection")
+		}
+	}
+}
 func TestGoogleSignedIdentityValidation(t *testing.T) {
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {

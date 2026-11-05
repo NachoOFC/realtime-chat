@@ -96,3 +96,39 @@ test('a conversation removed before its history loads disappears without an erro
   assert.equal(chat.conversations.length, 0)
   assert.equal(chat.errorMessage, null)
 })
+
+test('creating a group selects it and loads history through the normal conversation API', async () => {
+  const { chat, requests } = setup()
+  const creating = chat.createGroup('Amigos', ['other'])
+  requests[0].resolve({ id: 'group', kind: 'group', name: 'Amigos', peer: { id: '' }, members: [] })
+  await Promise.resolve()
+  requests[1].resolve({ messages: [] })
+  assert.equal(await creating, true)
+  assert.equal(chat.activeConversationId, 'group')
+  assert.equal(chat.activeConversation.kind, 'group')
+})
+
+test('leaving a group invalidates a stale list and drops its cached private history', async () => {
+  const { chat, requests } = setup()
+  chat.conversations = [{ id: 'chat', kind: 'group' }]
+  chat.activeConversationId = 'chat'
+  chat.upsertMessage(message('cached'))
+  const staleList = chat.loadConversations()
+  const leaving = chat.leaveGroup('chat')
+  requests[1].resolve()
+  assert.equal(await leaving, true)
+  requests[0].resolve([{ id: 'chat', kind: 'group' }])
+  await staleList
+  assert.equal(chat.activeConversationId, null)
+  assert.equal(chat.messages.chat, undefined)
+  assert.equal(chat.conversations.length, 0)
+})
+
+test('a group invitation response from a previous identity is discarded', async () => {
+  const { chat, requests } = setup()
+  const adding = chat.addGroupMembers('group', ['other'])
+  chat.reset()
+  requests[0].resolve({ id: 'group', kind: 'group', members: [{ id: 'private-old-member' }] })
+  assert.equal(await adding, false)
+  assert.equal(chat.conversations.length, 0)
+})

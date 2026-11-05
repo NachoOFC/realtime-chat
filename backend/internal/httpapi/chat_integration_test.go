@@ -93,7 +93,7 @@ func TestChatOverTLS(t *testing.T) {
 	if err := pool.QueryRow(ctx, "SELECT current_schema()").Scan(&currentSchema); err != nil || currentSchema != schema {
 		t.Fatal("database did not select the isolated schema; refusing to run migrations", currentSchema, err)
 	}
-	for _, name := range []string{"0001_init.up.sql", "0002_guest_users.up.sql", "0003_google_and_temporary_guests.up.sql"} {
+	for _, name := range []string{"0001_init.up.sql", "0002_guest_users.up.sql", "0003_google_and_temporary_guests.up.sql", "0004_group_conversations.up.sql"} {
 		migration, err := os.ReadFile(filepath.Join("../../migrations", name))
 		if err != nil {
 			t.Fatal(err)

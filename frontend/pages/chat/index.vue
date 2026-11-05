@@ -5,6 +5,7 @@ import { useAuthStore } from '~/stores/auth'
 import { useChatSocket } from '~/composables/useChatSocket'
 import { useAssistantStore } from '~/stores/assistant'
 import { ASSISTANT_CONVERSATION_ID } from '~/utils/assistant'
+import { canWriteConversation } from '~/utils/conversations'
 const chat = useChatStore()
 const auth = useAuthStore()
 const socket = useChatSocket()
@@ -13,7 +14,7 @@ let stopListening: (() => void) | undefined
 let disposed = false
 const readSent = new Map<string, string>()
 function isOpenDirectConversation(id: string | null | undefined) {
-  return !!id && id !== ASSISTANT_CONVERSATION_ID && !!chat.conversations.find(item => item.id === id)?.peer.id
+  return !!id && id !== ASSISTANT_CONVERSATION_ID && canWriteConversation(chat.conversations.find(item => item.id === id))
 }
 async function refreshConversations() {
   await chat.loadConversations()
@@ -33,6 +34,9 @@ function markVisibleRead() {
 onMounted(async () => {
   stopListening = socket.onEvent(event => {
     switch (event.type) {
+      case 'conversation.updated':
+        void refreshConversations()
+        break
       case 'auth.expired':
         socket.disconnect()
         auth.clearSession()
@@ -48,6 +52,7 @@ onMounted(async () => {
           delete chat.onlineUsers[event.userId]
           for (const conversation of chat.conversations) {
             if (conversation.peer.id === event.userId) conversation.peer = { ...conversation.peer, id: '', username: 'Conversación finalizada' }
+            if (conversation.members) conversation.members = conversation.members.filter(member => member.id !== event.userId)
           }
           for (const id of Object.keys(chat.messages)) {
             chat.messages[id] = (chat.messages[id] ?? []).filter(message => message.senderId !== event.userId)
@@ -115,17 +120,17 @@ watch([() => chat.activeConversationId, () => chat.activeMessages.at(-1)?.id, ()
 })
 </script>
 <template>
-  <div class="flex flex-1 flex-col">
+  <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
     <div
       v-if="chat.errorMessage"
-      class="mb-3 flex items-center justify-between rounded-lg bg-amber-50 dark:bg-amber-950 px-3 py-2 text-sm text-amber-800 dark:text-amber-200"
+      class="mb-3 flex shrink-0 items-center justify-between rounded-lg bg-amber-50 dark:bg-amber-950 px-3 py-2 text-sm text-amber-800 dark:text-amber-200"
     >
       <span>{{ chat.errorMessage }}</span>
       <button type="button" class="font-medium" @click="chat.clearError()">Cerrar</button>
     </div>
 
     <div
-      class="flex min-h-[32rem] flex-1 overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm"
+      class="flex min-h-0 flex-1 overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
     >
       <ChatList />
       <AssistantChatWindow v-if="chat.activeConversationId === ASSISTANT_CONVERSATION_ID" />

@@ -2,6 +2,7 @@
 import { useAuthStore } from '~/stores/auth'
 
 const auth = useAuthStore()
+onMounted(() => auth.rememberCurrentAccount())
 const logoutError = ref('')
 const loggingOut = ref(false)
 async function logout() {
@@ -15,8 +16,8 @@ async function logout() {
 </script>
 
 <template>
-  <div class="flex min-h-screen flex-col">
-    <header class="border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+  <div class="flex h-dvh flex-col overflow-hidden">
+    <header class="shrink-0 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
       <div class="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-4 py-3">
         <NuxtLink to="/chat" class="text-lg font-semibold tracking-tight">
           Realtime Chat
@@ -40,7 +41,7 @@ async function logout() {
       </div>
     </header>
 
-    <main class="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 py-4">
+    <main class="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col overflow-y-auto px-4 py-4">
       <p v-if="logoutError" role="alert" class="mb-3 rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{{ logoutError }}</p>
       <slot />
     </main>
