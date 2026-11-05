@@ -2,6 +2,8 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import type { Conversation, Message, MessagePage, User } from '~/types'
 import { useApi } from '~/composables/useApi'
+import { useAssistantStore } from '~/stores/assistant'
+import { ASSISTANT_CONVERSATION_ID } from '~/utils/assistant'
 
 export const useChatStore = defineStore('chat', () => {
   const conversations = ref<Conversation[]>([])
@@ -20,6 +22,7 @@ export const useChatStore = defineStore('chat', () => {
   let historyEpoch = 0
   let conversationsRequest = 0
   let usersRequest = 0
+  let conversationEpochs: Record<string, number> = {}
   const activeConversation = computed(() => conversations.value.find(item => item.id === activeConversationId.value) ?? null)
   const activeMessages = computed(() => messages.value[activeConversationId.value ?? ''] ?? [])
   const activeTypingUsers = computed(() => typingByConversation.value[activeConversationId.value ?? ''] ?? [])
@@ -30,7 +33,13 @@ export const useChatStore = defineStore('chat', () => {
     loadingConversations.value = true
     try {
       const result = await useApi<Conversation[]>('/api/conversations')
-      if (epoch === sessionEpoch && request === conversationsRequest) conversations.value = result
+      if (epoch === sessionEpoch && request === conversationsRequest) {
+        const visible = new Set(result.map(item => item.id))
+        for (const previous of conversations.value) if (!visible.has(previous.id)) discardConversation(previous.id)
+        conversations.value = result
+        const selected = activeConversationId.value
+        if (selected && selected !== ASSISTANT_CONVERSATION_ID && !visible.has(selected)) discardConversation(selected)
+      }
     }
     catch { if (epoch === sessionEpoch && request === conversationsRequest) errorMessage.value = 'No se pudieron cargar las conversaciones.' }
     finally { if (epoch === sessionEpoch && request === conversationsRequest) loadingConversations.value = false }
@@ -51,6 +60,9 @@ export const useChatStore = defineStore('chat', () => {
     try {
       const conversation = await useApi<Conversation>('/api/conversations', { method: 'POST', body: { peerId } })
       if (epoch !== sessionEpoch) return false
+      // An older list response must not remove a conversation we just created.
+      conversationsRequest++
+      loadingConversations.value = false
       if (!conversations.value.some(item => item.id === conversation.id)) conversations.value.unshift(conversation)
       await selectConversation(conversation.id)
       return epoch === sessionEpoch
@@ -58,17 +70,20 @@ export const useChatStore = defineStore('chat', () => {
   }
   async function selectConversation(id: string) {
     activeConversationId.value = id
+    if (id === ASSISTANT_CONVERSATION_ID) return
     if (!loadedHistories.value[id]) await loadMessages(id)
   }
   async function loadMessages(id: string, before?: string) {
+    if (id === ASSISTANT_CONVERSATION_ID) return
     if (loadingMessages.value[id]) return
     const epoch = sessionEpoch
     const history = historyEpoch
+    const conversationEpoch = conversationEpochs[id] ?? 0
     const initialIDs = new Set((messages.value[id] ?? []).map(message => message.id))
     loadingMessages.value[id] = true
     try {
       const page = await useApi<MessagePage>(`/api/conversations/${id}/messages`, { query: { before } })
-      if (epoch !== sessionEpoch || history !== historyEpoch) return
+      if (epoch !== sessionEpoch || history !== historyEpoch || conversationEpoch !== (conversationEpochs[id] ?? 0)) return
       const current = messages.value[id] ?? []
       // The first page replaces confirmed cache entries, including deleted messages.
       // Preserve optimistic sends and events that arrived after this request began.
@@ -83,8 +98,24 @@ export const useChatStore = defineStore('chat', () => {
       messages.value[id] = result
       loadedHistories.value[id] = true
       nextCursors.value[id] = page.nextCursor
-    } catch { if (epoch === sessionEpoch && history === historyEpoch) errorMessage.value = 'No se pudo cargar el historial.' }
-    finally { if (epoch === sessionEpoch && history === historyEpoch) loadingMessages.value[id] = false }
+    } catch (error) {
+      if (epoch !== sessionEpoch || history !== historyEpoch || conversationEpoch !== (conversationEpochs[id] ?? 0)) return
+      const status = (error as { statusCode?: number; status?: number }).statusCode ?? (error as { status?: number }).status
+      if (status === 403 || status === 404 || status === 410) {
+        conversations.value = conversations.value.filter(item => item.id !== id)
+        discardConversation(id)
+      } else errorMessage.value = 'No se pudo cargar el historial.'
+    }
+    finally { if (epoch === sessionEpoch && history === historyEpoch && conversationEpoch === (conversationEpochs[id] ?? 0)) loadingMessages.value[id] = false }
+  }
+  function discardConversation(id: string) {
+    conversationEpochs[id] = (conversationEpochs[id] ?? 0) + 1
+    delete messages.value[id]
+    delete loadedHistories.value[id]
+    delete nextCursors.value[id]
+    delete loadingMessages.value[id]
+    delete typingByConversation.value[id]
+    if (activeConversationId.value === id) activeConversationId.value = null
   }
   function upsertMessage(message: Message) {
     const current = messages.value[message.conversationId] ?? []
@@ -129,8 +160,10 @@ export const useChatStore = defineStore('chat', () => {
     loadingMessages.value = {}
   }
   function reset() {
+    useAssistantStore().reset()
     sessionEpoch++
     historyEpoch++
+    conversationEpochs = {}
     conversations.value = []; users.value = []; onlineUsers.value = {}; activeConversationId.value = null
     messages.value = {}; loadedHistories.value = {}; nextCursors.value = {}; loadingMessages.value = {}; typingByConversation.value = {}; errorMessage.value = null
     loadingConversations.value = false

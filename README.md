@@ -1,6 +1,6 @@
 # Realtime Chat
 
-Chat 1:1 en tiempo real estilo WhatsApp. Incluye acceso con Google o apodo temporal, conversaciones privadas, persistencia en PostgreSQL, WebSockets y soporte HTTPS/WSS.
+Chat 1:1 en tiempo real estilo WhatsApp. Incluye acceso con Google o apodo temporal, conversaciones privadas, persistencia en PostgreSQL, WebSockets, soporte HTTPS/WSS y un asistente de IA con Google Gemini.
 
 ## Stack
 
@@ -170,6 +170,7 @@ En `/login` puedes entrar con Google o como invitado con apodo. Google permite r
 Entra con un apodo y selecciona **Nuevo chat** para buscar otro usuario. Para probar dos sesiones, abre una ventana de incógnito con otro apodo. El chat guarda los mensajes, recupera el historial por páginas, confirma lecturas e indica quién está escribiendo.
 
 - [Configurar Google e invitados temporales](docs/google-y-invitados.md)
+- [Activar IACHAT con Google Gemini](docs/asistente-ia.md)
 - [Configurar HTTPS/WSS local y en producción](docs/tls.md)
 - [Ejemplo de lo que guarda cada tabla](docs/datos-ejemplo.md)
 

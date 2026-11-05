@@ -3,6 +3,7 @@ type ApiOptions = {
   body?: Record<string, unknown>
   query?: Record<string, string | number | boolean | undefined>
   headers?: Record<string, string>
+  signal?: AbortSignal
 }
 
 export function useApi<T>(path: string, options: ApiOptions = {}): Promise<T> {
@@ -16,6 +17,7 @@ export function useApi<T>(path: string, options: ApiOptions = {}): Promise<T> {
     method: options.method,
     body: options.body,
     query: options.query,
+    signal: options.signal,
     headers: { ...(import.meta.server ? useRequestHeaders(['cookie']) : {}), ...options.headers },
   })
 }

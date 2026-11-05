@@ -162,6 +162,68 @@ func TestGoogleAccountsAndGuestCleanup(t *testing.T) {
 	if _, err = repository.DeleteGuest(ctx, account.ID, false); !errors.Is(err, ErrNotFound) {
 		t.Fatal("cleanup can delete a Google account", err)
 	}
+	for _, scenario := range []struct {
+		name           string
+		guestMessage   bool
+		legacyDeletion bool
+	}{
+		{name: "empty conversation"},
+		{name: "only guest messages", guestMessage: true},
+		{name: "legacy empty conversation", legacyDeletion: true},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			temporaryGuest, _, err := service.GuestLogin(ctx, "Guest_"+uuid.NewString()[:8])
+			if err != nil {
+				t.Fatal(err)
+			}
+			temporaryChat, err := chats.CreateDirect(ctx, account.ID, temporaryGuest.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			list, err := chats.ListConversations(ctx, account.ID)
+			if err != nil || !hasConversation(list, temporaryChat.ID) {
+				t.Fatal("an open conversation without messages must stay visible", err)
+			}
+			if _, err = chats.ListMessages(ctx, account.ID, temporaryChat.ID, "", 30); err != nil {
+				t.Fatal("an open conversation without messages must stay accessible", err)
+			}
+			if scenario.guestMessage {
+				if _, err = chats.SendMessage(ctx, temporaryGuest.ID, temporaryChat.ID, uuid.NewString(), "Temporal"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if scenario.legacyDeletion {
+				// Simulate empty conversations left behind by the previous cleanup.
+				_, err = pool.Exec(ctx, `DELETE FROM users WHERE id=$1`, temporaryGuest.ID)
+			} else {
+				_, err = repository.DeleteGuest(ctx, temporaryGuest.ID, false)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			list, err = chats.ListConversations(ctx, account.ID)
+			if err != nil || hasConversation(list, temporaryChat.ID) {
+				t.Fatal("a closed conversation without messages must disappear", err)
+			}
+			if !hasConversation(list, conversation.ID) {
+				t.Fatal("cleanup hid the conversation with the permanent participant's messages")
+			}
+			_, err = chats.ListMessages(ctx, account.ID, temporaryChat.ID, "", 30)
+			if scenario.legacyDeletion {
+				if !errors.Is(err, chat.ErrNotFound) {
+					t.Fatal("a legacy empty conversation remains accessible", err)
+				}
+			} else {
+				var exists bool
+				if queryErr := pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM conversations WHERE id=$1)`, temporaryChat.ID).Scan(&exists); queryErr != nil || exists {
+					t.Fatal("cleanup retained an empty conversation", queryErr)
+				}
+				if !errors.Is(err, chat.ErrForbidden) {
+					t.Fatal("a deleted conversation remains accessible", err)
+				}
+			}
+		})
+	}
 	replacement, _, err := service.GuestLogin(ctx, "Persona")
 	if err != nil || replacement.ID == guest.ID {
 		t.Fatal("deleted nickname cannot be reused safely", err)
@@ -203,4 +265,13 @@ func TestGoogleAccountsAndGuestCleanup(t *testing.T) {
 		}
 	}
 	t.Log("Google identity recovery, guest expiration, deletion, closed chat history and cookie policy verified")
+}
+
+func hasConversation(conversations []chat.Conversation, id string) bool {
+	for _, conversation := range conversations {
+		if conversation.ID == id {
+			return true
+		}
+	}
+	return false
 }

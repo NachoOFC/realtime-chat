@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/url"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -12,7 +13,13 @@ import (
 
 const defaultJWTSecret = "dev-only-change-me"
 
+const DefaultGeminiModel = "gemini-3.5-flash-lite"
+
+var geminiModelPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,99}$`)
+
 type Config struct {
+	GeminiAPIKey       string
+	GeminiModel        string
 	GoogleClientID     string
 	GoogleClientSecret string
 	GoogleRedirectURL  string
@@ -33,6 +40,8 @@ type Config struct {
 
 func Load() Config {
 	return Config{
+		GeminiAPIKey:       strings.TrimSpace(os.Getenv("GEMINI_API_KEY")),
+		GeminiModel:        getenv("GEMINI_MODEL", DefaultGeminiModel),
 		GoogleClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
 		GoogleClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
 		GoogleRedirectURL:  os.Getenv("GOOGLE_REDIRECT_URL"),
@@ -53,6 +62,12 @@ func Load() Config {
 }
 
 func (c Config) Validate() error {
+	if (c.GeminiModel != "" && !geminiModelPattern.MatchString(c.GeminiModel)) || (c.GeminiAPIKey != "" && c.GeminiModel == "") {
+		return errors.New("GEMINI_MODEL debe ser un identificador de modelo válido, sin rutas ni parámetros")
+	}
+	if len(c.GeminiAPIKey) > 512 || strings.ContainsAny(c.GeminiAPIKey, "\r\n") {
+		return errors.New("GEMINI_API_KEY no tiene un formato válido")
+	}
 	if c.GoogleClientID != "" || c.GoogleClientSecret != "" || c.GoogleRedirectURL != "" {
 		if !c.GoogleEnabled() {
 			return errors.New("configura GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET y GOOGLE_REDIRECT_URL juntos")

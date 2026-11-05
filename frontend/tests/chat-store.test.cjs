@@ -11,6 +11,8 @@ function setup() {
     if (name === 'pinia') return pinia
     if (name === 'vue') return vue
     if (name === '~/composables/useApi') return { useApi: () => { const request = deferred(); requests.push(request); return request.promise } }
+    if (name === '~/stores/assistant') return { useAssistantStore: () => ({ reset() {} }) }
+    if (name === '~/utils/assistant') return { ASSISTANT_CONVERSATION_ID: 'iachat' }
     return require(name)
   })
   return { chat: useChatStore(), requests }
@@ -53,4 +55,44 @@ test('responses from an old identity cannot repopulate a new session', async () 
   assert.equal(Object.keys(chat.messages).length, 0)
   assert.equal(chat.conversations.length, 0)
   assert.equal(chat.users.length, 0)
+})
+
+test('a removed conversation clears selection and ignores its pending history response', async () => {
+  const { chat, requests } = setup()
+  chat.conversations = [{ id: 'chat' }]
+  const selecting = chat.selectConversation('chat')
+  const refreshing = chat.loadConversations()
+  chat.nextCursors.chat = 'old-cursor'
+  chat.setTyping('chat', 'departed-guest', true)
+  requests[1].resolve([])
+  await refreshing
+  requests[0].resolve({ messages: [message('deleted-guest-message')] })
+  await selecting
+  assert.equal(chat.activeConversationId, null)
+  assert.equal(chat.messages.chat, undefined)
+  assert.equal(chat.nextCursors.chat, undefined)
+  assert.equal(chat.loadingMessages.chat, undefined)
+  assert.equal(chat.typingByConversation.chat, undefined)
+  assert.equal(chat.errorMessage, null)
+})
+
+test('refreshing direct conversations preserves the assistant selection without loading server history', async () => {
+  const { chat, requests } = setup()
+  await chat.selectConversation('iachat')
+  assert.equal(requests.length, 0)
+  const refreshing = chat.loadConversations()
+  requests[0].resolve([])
+  await refreshing
+  assert.equal(chat.activeConversationId, 'iachat')
+})
+
+test('a conversation removed before its history loads disappears without an error banner', async () => {
+  const { chat, requests } = setup()
+  chat.conversations = [{ id: 'chat' }]
+  const selecting = chat.selectConversation('chat')
+  requests[0].reject({ statusCode: 404 })
+  await selecting
+  assert.equal(chat.activeConversationId, null)
+  assert.equal(chat.conversations.length, 0)
+  assert.equal(chat.errorMessage, null)
 })

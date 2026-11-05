@@ -38,7 +38,7 @@ func NewPostgresRepository(pool *pgxpool.Pool) *PostgresRepository {
 	return &PostgresRepository{pool: pool}
 }
 
-const conversationQuery = `SELECT c.id::text, COALESCE(peer.id::text, ''), COALESCE(peer.username, 'Invitado que salió'),
+const conversationQuery = `SELECT c.id::text, COALESCE(peer.id::text, ''), COALESCE(peer.username, 'Conversación finalizada'),
  COALESCE(peer.avatar_url, ''), peer.last_seen_at, CASE WHEN peer.google_subject IS NOT NULL THEN 'google' WHEN peer.is_guest OR peer.id IS NULL THEN 'guest' ELSE 'password' END, mine.unread_count,
  COALESCE(last.created_at, c.created_at),
  CASE WHEN last.id IS NULL THEN NULL ELSE jsonb_build_object(
@@ -63,7 +63,8 @@ func scanConversation(row pgx.Row) (Conversation, error) {
 }
 
 func (r *PostgresRepository) ListConversations(ctx context.Context, userID string) ([]Conversation, error) {
-	rows, err := r.pool.Query(ctx, conversationQuery+` ORDER BY COALESCE(last.created_at, c.created_at) DESC, c.id`, userID)
+	rows, err := r.pool.Query(ctx, conversationQuery+` WHERE peer.id IS NOT NULL OR last.id IS NOT NULL
+ ORDER BY COALESCE(last.created_at, c.created_at) DESC, c.id`, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -142,12 +143,19 @@ func decodeCursor(value string) (messageCursor, error) {
 	return c, nil
 }
 func (r *PostgresRepository) ListMessages(ctx context.Context, userID, conversationID, before string, limit int) (MessagePage, error) {
-	member, err := r.IsMember(ctx, userID, conversationID)
+	var member, visible bool
+	err := r.pool.QueryRow(ctx, `SELECT
+ EXISTS(SELECT 1 FROM conversation_members WHERE conversation_id=$1 AND user_id=$2),
+ EXISTS(SELECT 1 FROM conversation_members WHERE conversation_id=$1 AND user_id<>$2)
+ OR EXISTS(SELECT 1 FROM messages WHERE conversation_id=$1)`, conversationID, userID).Scan(&member, &visible)
 	if err != nil {
 		return MessagePage{}, err
 	}
 	if !member {
 		return MessagePage{}, ErrForbidden
+	}
+	if !visible {
+		return MessagePage{}, ErrNotFound
 	}
 	query := `SELECT ` + messageColumns + `,
  CASE WHEN EXISTS(SELECT 1 FROM conversation_members cm JOIN messages seen ON seen.id=cm.last_read_message_id
