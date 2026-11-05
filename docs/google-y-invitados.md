@@ -50,6 +50,6 @@ Por eso la eliminación inmediata se realiza al pulsar **Salir**, tras una confi
 
 Las conexiones WebSocket de un invitado eliminado se cierran y su cookie anterior deja de autenticar peticiones. El apodo queda disponible para una identidad nueva, que no recupera los mensajes anteriores.
 
-Los mensajes de los otros participantes se conservan en un chat cerrado con el nombre «Invitado que salió». Se actualizan las lecturas y los contadores y ya no se puede enviar a ese chat.
+Los mensajes de los otros participantes se conservan en un chat cerrado con el nombre «Conversación finalizada». Se actualizan las lecturas y los contadores y ya no se puede enviar a ese chat. Si no queda ningún mensaje, la conversación se elimina de la lista; las conversaciones vacías antiguas también se ocultan.
 
 Para publicar la app, sigue [la guía de despliegue](despliegue.md).

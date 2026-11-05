@@ -54,12 +54,12 @@ async function loadEarlier() {
       <span
         class="flex size-9 items-center justify-center rounded-full bg-slate-200 dark:bg-slate-700 text-sm font-semibold text-slate-700 dark:text-slate-200"
       >
-        {{ chat.activeConversation.peer.username.slice(0, 1).toUpperCase() }}
+        {{ chat.activeConversation.peer.id ? chat.activeConversation.peer.username.slice(0, 1).toUpperCase() : '—' }}
       </span>
 
       <div>
-        <p class="flex items-center gap-2 font-medium">{{ chat.activeConversation.peer.username }}<AccountBadge :provider="chat.activeConversation.peer.authProvider" /></p>
-        <p class="text-xs text-slate-500 dark:text-slate-400">Chat 1:1</p>
+        <p class="flex items-center gap-2 font-medium">{{ chat.activeConversation.peer.id ? chat.activeConversation.peer.username : 'Conversación finalizada' }}<AccountBadge v-if="chat.activeConversation.peer.id" :provider="chat.activeConversation.peer.authProvider" /></p>
+        <p class="text-xs text-slate-500 dark:text-slate-400">{{ chat.activeConversation.peer.id ? 'Chat 1:1' : 'Historial disponible' }}</p>
       </div>
     </header>
 
@@ -79,7 +79,7 @@ async function loadEarlier() {
 
     <TypingIndicator :active="peerTyping" />
 
-    <p v-if="!chat.activeConversation.peer.id" class="border-t border-slate-200 p-3 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">El invitado salió. Sus mensajes se eliminaron; puedes consultar los que tú enviaste.</p>
+    <p v-if="!chat.activeConversation.peer.id" class="border-t border-slate-200 p-3 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">Esta cuenta de invitado ya no está disponible. Aquí se conservan los mensajes que enviaste.</p>
     <MessageComposer v-else :key="chat.activeConversation.id" :conversation-id="chat.activeConversation.id" />
   </section>
 

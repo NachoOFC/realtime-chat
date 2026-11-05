@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"realtime-chat/backend/internal/assistant"
 	"realtime-chat/backend/internal/auth"
 	"realtime-chat/backend/internal/chat"
 	"realtime-chat/backend/internal/config"
@@ -17,6 +18,7 @@ import (
 )
 
 type Dependencies struct {
+	Assistant      *assistant.Handler
 	Google         *users.GoogleHandler
 	Config         config.Config
 	AuthMiddleware func(http.Handler) http.Handler
@@ -74,6 +76,12 @@ func NewRouter(deps Dependencies) http.Handler {
 
 		router.Group(func(router chi.Router) {
 			router.Use(deps.AuthMiddleware)
+			ai := deps.Assistant
+			if ai == nil {
+				ai = assistant.NewHandler(deps.Config)
+			}
+			router.Get("/assistant", ai.Status)
+			router.Post("/assistant/messages", ai.Messages)
 			router.Post("/auth/logout", deps.Users.Logout)
 
 			router.Get("/me", deps.Users.Me)

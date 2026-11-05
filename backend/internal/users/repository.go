@@ -279,7 +279,9 @@ func (r *PostgresRepository) DeleteGuest(ctx context.Context, id string, expired
 	if err != nil {
 		return result, err
 	}
-	_, err = tx.Exec(ctx, `DELETE FROM conversations c WHERE c.id=ANY($1::uuid[]) AND NOT EXISTS(SELECT 1 FROM conversation_members WHERE conversation_id=c.id)`, result.ConversationIDs)
+	_, err = tx.Exec(ctx, `DELETE FROM conversations c WHERE c.id=ANY($1::uuid[]) AND (
+ NOT EXISTS(SELECT 1 FROM conversation_members WHERE conversation_id=c.id)
+ OR NOT EXISTS(SELECT 1 FROM messages WHERE conversation_id=c.id))`, result.ConversationIDs)
 	if err != nil {
 		return result, err
 	}

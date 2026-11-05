@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
+	"realtime-chat/backend/internal/assistant"
 	"realtime-chat/backend/internal/auth"
 	"realtime-chat/backend/internal/chat"
 	"realtime-chat/backend/internal/config"
@@ -81,6 +82,7 @@ func main() {
 	}()
 
 	router := httpapi.NewRouter(httpapi.Dependencies{
+		Assistant:      assistant.NewHandler(cfg),
 		Config:         cfg,
 		AuthMiddleware: auth.Middleware(cfg.JWTSecret, usersService.IsActive),
 		Google:         users.NewGoogleHandler(usersService, cfg),

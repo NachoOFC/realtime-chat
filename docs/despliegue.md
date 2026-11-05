@@ -100,6 +100,8 @@ Si el proyecto OAuth continúa en modo de pruebas, agrega las cuentas que lo van
 4. Inicia un chat entre ambos, envía mensajes y comprueba el historial.
 5. Sal como invitado. Su perfil y sus mensajes deben desaparecer; la cuenta Google conserva los mensajes que ella envió.
 
+IACHAT aparece siempre en la lista. Para habilitar sus respuestas, agrega `GEMINI_API_KEY` en Render y vuelve a desplegar el backend. La clave se crea en [Google AI Studio](https://aistudio.google.com/apikey); los pasos y el alcance del historial están en [la guía de IACHAT](asistente-ia.md).
+
 El Blueprint elige el plan Free de Render para las pruebas. Ese plan se suspende después de 15 minutos sin tráfico y puede tardar alrededor de un minuto en volver a responder. El primer acceso puede necesitar una espera y recarga. Un chat que deba estar disponible continuamente necesita una instancia que permanezca activa. [Límites del plan Free](https://render.com/docs/free)
 
 El hub de WebSockets actual vive en la memoria de una sola instancia; el Blueprint mantiene una instancia. Para escalar a varias habría que compartir los eventos, por ejemplo con Redis.

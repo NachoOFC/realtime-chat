@@ -3,15 +3,30 @@ import { watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useChatStore } from '~/stores/chat'
 import { useAuthStore } from '~/stores/auth'
 import { useChatSocket } from '~/composables/useChatSocket'
+import { useAssistantStore } from '~/stores/assistant'
+import { ASSISTANT_CONVERSATION_ID } from '~/utils/assistant'
 const chat = useChatStore()
 const auth = useAuthStore()
 const socket = useChatSocket()
+const assistant = useAssistantStore()
 let stopListening: (() => void) | undefined
 let disposed = false
 const readSent = new Map<string, string>()
+function isOpenDirectConversation(id: string | null | undefined) {
+  return !!id && id !== ASSISTANT_CONVERSATION_ID && !!chat.conversations.find(item => item.id === id)?.peer.id
+}
+async function refreshConversations() {
+  await chat.loadConversations()
+  if (disposed) return
+  const id = chat.activeConversationId
+  if (!id || id === ASSISTANT_CONVERSATION_ID) return
+  if (socket.status.value === 'open' && isOpenDirectConversation(id)) socket.send({ type: 'conversation.join', conversationId: id })
+  await chat.loadMessages(id)
+}
 function markVisibleRead() {
   if (disposed || document.visibilityState !== 'visible' || !document.hasFocus() || socket.status.value !== 'open') return
   const id = chat.activeConversationId
+  if (!isOpenDirectConversation(id)) return
   const message = chat.activeMessages.filter(item => item.status !== 'sending').at(-1)
   if (id && message && readSent.get(id) !== message.id && socket.send({ type: 'message.read', conversationId: id, messageId: message.id })) readSent.set(id, message.id)
 }
@@ -31,13 +46,15 @@ onMounted(async () => {
         } else {
           chat.users = chat.users.filter(user => user.id !== event.userId)
           delete chat.onlineUsers[event.userId]
+          for (const conversation of chat.conversations) {
+            if (conversation.peer.id === event.userId) conversation.peer = { ...conversation.peer, id: '', username: 'Conversación finalizada' }
+          }
           for (const id of Object.keys(chat.messages)) {
             chat.messages[id] = (chat.messages[id] ?? []).filter(message => message.senderId !== event.userId)
-            chat.setTyping(id, event.userId, false)
           }
+          for (const id of Object.keys(chat.typingByConversation)) chat.setTyping(id, event.userId, false)
           chat.invalidateHistories()
-          if (chat.activeConversationId) void chat.loadMessages(chat.activeConversationId)
-          void chat.loadConversations()
+          void refreshConversations()
         }
         break
       case 'message.new': {
@@ -65,6 +82,7 @@ onMounted(async () => {
   })
   document.addEventListener('visibilitychange', markVisibleRead)
   window.addEventListener('focus', markVisibleRead)
+  void assistant.loadStatus()
   await chat.loadConversations()
   if (disposed) return
   await socket.connect()
@@ -78,19 +96,18 @@ onBeforeUnmount(() => {
 })
 watch(() => chat.activeConversationId, (id, previous) => {
   if (socket.status.value !== 'open') return
-  if (previous) { socket.send({ type: 'typing', conversationId: previous, active: false }); socket.send({ type: 'conversation.leave', conversationId: previous }) }
-  if (id) socket.send({ type: 'conversation.join', conversationId: id })
+  if (previous && previous !== ASSISTANT_CONVERSATION_ID && chat.conversations.some(item => item.id === previous)) {
+    if (isOpenDirectConversation(previous)) socket.send({ type: 'typing', conversationId: previous, active: false })
+    socket.send({ type: 'conversation.leave', conversationId: previous })
+  }
+  if (id && isOpenDirectConversation(id)) socket.send({ type: 'conversation.join', conversationId: id })
 })
 watch(() => socket.status.value, status => {
   if (status === 'open') {
     readSent.clear()
     chat.invalidateHistories()
     // Refresh history after reconnecting so messages sent while offline are recovered.
-    void chat.loadConversations()
-    if (chat.activeConversationId) {
-      socket.send({ type: 'conversation.join', conversationId: chat.activeConversationId })
-      void chat.loadMessages(chat.activeConversationId)
-    }
+    void refreshConversations()
   } else chat.onlineUsers = {}
 })
 watch([() => chat.activeConversationId, () => chat.activeMessages.at(-1)?.id, () => socket.status.value], () => {
@@ -111,7 +128,8 @@ watch([() => chat.activeConversationId, () => chat.activeMessages.at(-1)?.id, ()
       class="flex min-h-[32rem] flex-1 overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm"
     >
       <ChatList />
-      <ChatWindow />
+      <AssistantChatWindow v-if="chat.activeConversationId === ASSISTANT_CONVERSATION_ID" />
+      <ChatWindow v-else />
     </div>
   </div>
 </template>

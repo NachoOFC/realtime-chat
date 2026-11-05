@@ -16,7 +16,7 @@ const content = ref('')
 let typingTimer: ReturnType<typeof setTimeout> | undefined
 function stopTyping() {
   clearTimeout(typingTimer)
-  socket.send({ type: 'typing', conversationId: props.conversationId, active: false })
+  if (chat.conversations.find(item => item.id === props.conversationId)?.peer.id) socket.send({ type: 'typing', conversationId: props.conversationId, active: false })
 }
 function announceTyping() {
   socket.send({ type: 'typing', conversationId: props.conversationId, active: !!content.value.trim() })

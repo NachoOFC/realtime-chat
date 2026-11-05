@@ -11,6 +11,9 @@ services:
     envVars:
       - key: APP_ENV
         value: production
+      # GEMINI_API_KEY es opcional: agregarla manualmente en Environment.
+      - key: GEMINI_MODEL
+        value: gemini-3.5-flash-lite
       - key: DATABASE_URL
         sync: false
       - key: JWT_SECRET
