@@ -17,6 +17,8 @@ export const useChatStore = defineStore('chat', () => {
   const typingByConversation = ref<Record<string, string[]>>({})
   const loadingConversations = ref(false)
   const loadingUsers = ref(false)
+  const conversationFilter = ref<'all' | 'groups'>('all')
+  const deletedMessageIDs = new Set<string>()
   const errorMessage = ref<string | null>(null)
   let sessionEpoch = 0
   let historyEpoch = 0
@@ -130,7 +132,7 @@ export const useChatStore = defineStore('chat', () => {
       // The first page replaces confirmed cache entries, including deleted messages.
       // Preserve optimistic sends and events that arrived after this request began.
       const preserved = before ? current : current.filter(item => item.status === 'sending' || !initialIDs.has(item.id))
-      const combined = [...page.messages, ...preserved]
+      const combined = [...page.messages, ...preserved].filter(item => !deletedMessageIDs.has(item.id))
       const result: Message[] = []
       for (const message of combined) {
         const existing = result.find(item => item.id === message.id || (message.clientMessageId && item.clientMessageId === message.clientMessageId))
@@ -160,6 +162,7 @@ export const useChatStore = defineStore('chat', () => {
     if (activeConversationId.value === id) activeConversationId.value = null
   }
   function upsertMessage(message: Message) {
+    if (deletedMessageIDs.has(message.id)) return false
     const current = messages.value[message.conversationId] ?? []
     const index = current.findIndex(item => item.id === message.id || (message.clientMessageId && item.clientMessageId === message.clientMessageId))
     if (index >= 0) {
@@ -168,6 +171,36 @@ export const useChatStore = defineStore('chat', () => {
     }
     messages.value[message.conversationId] = [...current, message]
     return true
+  }
+  function removeMessage(conversationId: string, messageId: string) {
+    deletedMessageIDs.add(messageId)
+    conversationEpochs[conversationId] = (conversationEpochs[conversationId] ?? 0) + 1
+    messages.value[conversationId] = (messages.value[conversationId] || []).filter(item => item.id !== messageId)
+    delete loadedHistories.value[conversationId]
+    delete nextCursors.value[conversationId]
+    delete loadingMessages.value[conversationId]
+  }
+  async function deleteMessage(conversationId: string, messageId: string) {
+    const epoch = sessionEpoch
+    try {
+      await useApi(`/api/conversations/${conversationId}/messages/${messageId}`, { method: 'DELETE' })
+      if (epoch !== sessionEpoch) return false
+      removeMessage(conversationId, messageId)
+      await loadConversations()
+      return true
+    } catch (error) { if (epoch === sessionEpoch) errorMessage.value = groupError(error, 'No se pudo eliminar el mensaje.'); return false }
+  }
+  async function deleteConversation(id: string) {
+    const epoch = sessionEpoch
+    try {
+      await useApi(`/api/conversations/${id}`, { method: 'DELETE' })
+      if (epoch !== sessionEpoch) return false
+      conversationsRequest++
+      loadingConversations.value = false
+      conversations.value = conversations.value.filter(item => item.id !== id)
+      discardConversation(id)
+      return true
+    } catch (error) { if (epoch === sessionEpoch) errorMessage.value = groupError(error, 'No se pudo eliminar el chat.'); return false }
   }
   function confirmMessage(clientMessageId: string, message: Message) { upsertMessage({ ...message, clientMessageId, status: 'sent' }) }
   function setTyping(conversationId: string, userId: string, active: boolean) {
@@ -202,6 +235,8 @@ export const useChatStore = defineStore('chat', () => {
     loadingMessages.value = {}
   }
   function reset() {
+    deletedMessageIDs.clear()
+    conversationFilter.value = 'all'
     useAssistantStore().reset()
     sessionEpoch++
     historyEpoch++
@@ -213,7 +248,7 @@ export const useChatStore = defineStore('chat', () => {
   }
   function clearError() { errorMessage.value = null }
   return { conversations, users, onlineUsers, activeConversationId, messages, nextCursors, loadingMessages, typingByConversation,
-    loadingConversations, loadingUsers, errorMessage, activeConversation, activeMessages, activeTypingUsers,
+    loadingConversations, loadingUsers, conversationFilter, errorMessage, activeConversation, activeMessages, activeTypingUsers,
     loadConversations, loadUsers, startConversation, createGroup, addGroupMembers, leaveGroup, selectConversation, loadMessages, upsertMessage, confirmMessage,
-    setTyping, updateConversationPreview, markRead, invalidateHistories, reset, clearError }
+    setTyping, updateConversationPreview, markRead, invalidateHistories, removeMessage, deleteMessage, deleteConversation, reset, clearError }
 })

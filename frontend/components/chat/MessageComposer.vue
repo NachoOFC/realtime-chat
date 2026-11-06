@@ -64,7 +64,7 @@ function submit() {
 </script>
 
 <template>
-  <form class="flex shrink-0 gap-2 border-t border-slate-200 dark:border-slate-700 p-3" @submit.prevent="submit">
+  <form class="flex shrink-0 items-center gap-3 border-t border-slate-200 px-5 py-4 dark:border-slate-800" @submit.prevent="submit">
     <input
       v-model="content"
       @input="announceTyping"
@@ -72,14 +72,17 @@ function submit() {
       type="text"
       maxlength="4000"
       autocomplete="off"
-      placeholder="Escribe un mensaje"
-      class="min-w-0 flex-1 rounded-md border border-slate-300 dark:border-slate-600 px-4 py-2 text-sm bg-white dark:bg-slate-900 outline-none focus:border-slate-500 dark:focus:border-sky-400"
+      placeholder="Escribe un mensaje…"
+      aria-label="Mensaje"
+      class="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-[#465fff] focus:ring-2 focus:ring-[#465fff]/10 dark:border-slate-700 dark:bg-slate-900"
     >
     <button
       type="submit"
-      class="rounded-md bg-slate-900 dark:bg-sky-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 dark:hover:bg-sky-500"
+      :disabled="!content.trim()"
+      aria-label="Enviar mensaje"
+      class="flex size-11 shrink-0 items-center justify-center rounded-xl bg-[#465fff] text-white transition hover:bg-[#3641f5] disabled:bg-[#c7d2fe] disabled:dark:bg-slate-700"
     >
-      Enviar
+      <ChatIcon name="send" :size="19" />
     </button>
   </form>
 </template>

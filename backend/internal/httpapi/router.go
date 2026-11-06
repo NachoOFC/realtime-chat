@@ -95,6 +95,8 @@ func NewRouter(deps Dependencies) http.Handler {
 				router.Post("/{id}/members", deps.Chat.AddGroupMembers)
 				router.Delete("/{id}/members/me", deps.Chat.LeaveGroup)
 				router.Get("/{id}/messages", deps.Chat.ListMessages)
+				router.Delete("/{id}", deps.Chat.DeleteConversation)
+				router.Delete("/{id}/messages/{messageId}", deps.Chat.DeleteMessage)
 			})
 		})
 	})

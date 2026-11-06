@@ -10,6 +10,14 @@ const groupMode = ref(false)
 const groupName = ref('')
 const selected = ref<string[]>([])
 const search = ref('')
+const chatSearch = ref('')
+const visibleConversations = computed(() => chat.conversations.filter(item => (chat.conversationFilter !== 'groups' || item.kind === 'group') && conversationTitle(item).toLocaleLowerCase().includes(chatSearch.value.trim().toLocaleLowerCase())))
+const showAssistant = computed(() => chat.conversationFilter === 'all' && 'iachat asistente gemini'.includes(chatSearch.value.trim().toLocaleLowerCase()))
+function messageTime(value?: string) {
+  if (!value) return ''
+  const date = new Date(value)
+  return date.toDateString() === new Date().toDateString() ? date.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' }) : date.toLocaleDateString('es', { day: 'numeric', month: 'short' })
+}
 const starting = ref(false)
 const onlyOnline = ref(false)
 const filteredUsers = computed(() => chat.users.filter(user => (!onlyOnline.value || chat.onlineUsers[user.id]) && user.username.toLocaleLowerCase().includes(search.value.trim().toLocaleLowerCase())).sort((a, b) => Number(!!chat.onlineUsers[b.id]) - Number(!!chat.onlineUsers[a.id]) || a.username.localeCompare(b.username)))
@@ -17,7 +25,7 @@ async function openUsers() { showUsers.value = true; groupMode.value = false; se
 async function start(id: string) {
   if (starting.value) return
   starting.value = true
-  try { if (await chat.startConversation(id)) showUsers.value = false }
+  try { if (await chat.startConversation(id)) { showUsers.value = false; chat.conversationFilter = 'all' } }
   finally { starting.value = false }
 }
 async function createGroup() {
@@ -29,11 +37,12 @@ async function createGroup() {
 </script>
 
 <template>
-  <aside class="flex min-h-0 w-80 shrink-0 flex-col overflow-hidden border-r border-slate-200 bg-slate-50/60 dark:border-slate-700 dark:bg-slate-950/60 max-md:w-full" :class="{ 'max-md:hidden': chat.activeConversationId }">
-    <div class="flex shrink-0 items-center justify-between gap-2 border-b border-slate-200 px-4 py-3 dark:border-slate-700">
-      <h2 class="text-sm font-medium">{{ showUsers ? 'Nuevo chat' : 'Chats' }}</h2>
-      <button type="button" class="rounded-md px-2 py-1 text-sm text-slate-600 hover:bg-slate-200 dark:text-slate-300 dark:hover:bg-slate-800" @click="showUsers ? showUsers = false : openUsers()">{{ showUsers ? 'Volver' : 'Nuevo chat' }}</button>
+  <aside class="flex min-h-0 w-80 shrink-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 max-md:w-full" :class="{ 'max-md:hidden': chat.activeConversationId }">
+    <div class="flex shrink-0 items-center justify-between gap-2 px-5 pb-4 pt-5">
+      <h2 class="text-base font-semibold">{{ showUsers ? 'Nuevo mensaje' : 'Mensajes' }}</h2>
+      <button type="button" class="flex size-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800" :aria-label="showUsers ? 'Volver a mensajes' : 'Nuevo chat'" :title="showUsers ? 'Volver' : 'Nuevo chat'" @click="showUsers ? showUsers = false : openUsers()"><ChatIcon :name="showUsers ? 'back' : 'plus'" :size="19" /></button>
     </div>
+    <div v-if="!showUsers" class="shrink-0 px-5 pb-4"><label class="relative block"><ChatIcon name="search" :size="17" class="pointer-events-none absolute left-3 top-3 text-slate-400" /><input v-model="chatSearch" type="search" aria-label="Buscar conversación" placeholder="Buscar conversación…" class="w-full rounded-lg border border-slate-200 bg-transparent py-2.5 pl-9 pr-3 text-sm outline-none placeholder:text-slate-400 focus:border-[#465fff] dark:border-slate-700"></label><div class="mt-3 flex gap-4 text-xs"><button type="button" :class="chat.conversationFilter === 'all' ? 'font-medium text-[#465fff]' : 'text-slate-400'" @click="chat.conversationFilter = 'all'">Todos</button><button type="button" :class="chat.conversationFilter === 'groups' ? 'font-medium text-[#465fff]' : 'text-slate-400'" @click="chat.conversationFilter = 'groups'">Grupos</button></div></div>
     <div v-if="showUsers" class="flex min-h-0 flex-col gap-2 overflow-y-auto overscroll-contain p-3">
       <div class="mb-2 flex gap-4 border-b border-slate-200 text-sm dark:border-slate-700">
         <button type="button" class="border-b-2 px-1 pb-2" :class="!groupMode ? 'border-slate-800 dark:border-slate-200' : 'border-transparent text-slate-500'" @click="groupMode = false">Persona</button>
@@ -58,27 +67,27 @@ async function createGroup() {
       <button v-if="groupMode" type="button" :disabled="starting || !selected.length || !groupName.trim()" class="mt-2 rounded-md bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-50 dark:bg-slate-200 dark:text-slate-900" @click="createGroup">{{ starting ? 'Creando…' : `Crear grupo (${selected.length + 1})` }}</button>
     </div>
     <template v-else>
-      <button type="button" class="flex w-full shrink-0 items-center gap-3 border-b border-slate-200 px-4 py-4 text-left transition hover:bg-white dark:border-slate-700 dark:hover:bg-slate-800" :class="{ 'bg-white dark:bg-slate-900': chat.activeConversationId === ASSISTANT_CONVERSATION_ID }" :aria-pressed="chat.activeConversationId === ASSISTANT_CONVERSATION_ID" @click="chat.selectConversation(ASSISTANT_CONVERSATION_ID)">
-        <span class="flex size-10 shrink-0 items-center justify-center rounded-full bg-slate-200 text-xs font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-200" aria-hidden="true">IA</span>
+      <button v-if="showAssistant" type="button" class="mx-3 mb-1 flex shrink-0 items-center gap-3 rounded-xl px-3 py-3 text-left transition hover:bg-[#f2f4f7] dark:hover:bg-slate-800" :class="{ 'bg-[#f2f4f7] dark:bg-slate-800': chat.activeConversationId === ASSISTANT_CONVERSATION_ID }" :aria-pressed="chat.activeConversationId === ASSISTANT_CONVERSATION_ID" @click="chat.selectConversation(ASSISTANT_CONVERSATION_ID)">
+        <ChatAvatar name="IACHAT" :assistant="true" />
         <span class="min-w-0 flex-1">
-          <span class="block font-medium">IACHAT</span>
+          <span class="flex items-center justify-between gap-2"><span class="text-sm font-medium">IACHAT</span><span class="text-[10px] text-slate-400">Gemini</span></span>
           <span class="mt-0.5 block truncate text-xs text-slate-500 dark:text-slate-400">{{ assistant.sending ? 'Escribiendo…' : assistant.messages.at(-1)?.content || 'Asistente' }}</span>
         </span>
       </button>
       <p v-if="chat.loadingConversations" class="p-4 text-sm text-slate-500 dark:text-slate-400">Cargando...</p>
-      <ul v-else-if="chat.conversations.length" class="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-        <li v-for="conversation in chat.conversations" :key="conversation.id">
-          <button type="button" class="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-white dark:hover:bg-slate-800" :class="{ 'bg-white dark:bg-slate-900': chat.activeConversationId === conversation.id }" @click="chat.selectConversation(conversation.id)">
-            <span class="flex size-10 shrink-0 items-center justify-center rounded-full bg-slate-200 text-sm font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-200">{{ conversationTitle(conversation).slice(0, 1).toUpperCase() }}</span>
+      <ul v-else-if="visibleConversations.length" class="chat-scroll min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain px-3 pb-4">
+        <li v-for="conversation in visibleConversations" :key="conversation.id">
+          <button type="button" class="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition hover:bg-[#f2f4f7] dark:hover:bg-slate-800" :class="{ 'bg-[#f2f4f7] dark:bg-slate-800': chat.activeConversationId === conversation.id }" @click="chat.selectConversation(conversation.id)">
+            <ChatAvatar :name="conversationTitle(conversation)" :image="conversation.kind !== 'group' ? conversation.peer.avatarUrl : undefined" :group="conversation.kind === 'group'" :online="conversation.kind !== 'group' && conversation.peer.id ? !!chat.onlineUsers[conversation.peer.id] : undefined" />
             <span class="min-w-0 flex-1">
-              <span class="flex items-center justify-between gap-2"><span class="truncate font-medium">{{ conversationTitle(conversation) }}</span><span v-if="conversation.kind === 'group'" class="shrink-0 text-[10px] text-slate-500 dark:text-slate-400">{{ conversation.members?.length }} personas</span><template v-else-if="conversation.peer.id"><AccountBadge :provider="conversation.peer.authProvider" /><PresenceDot :online="!!chat.onlineUsers[conversation.peer.id]" /></template><span v-else class="text-[10px] text-slate-500 dark:text-slate-400">Finalizada</span></span>
+              <span class="flex items-center justify-between gap-2"><span class="truncate text-sm font-medium">{{ conversationTitle(conversation) }}</span><span class="shrink-0 text-[10px] text-slate-400">{{ messageTime(conversation.lastMessage?.createdAt || conversation.updatedAt) }}</span></span>
               <span class="mt-0.5 block truncate text-xs text-slate-500 dark:text-slate-400">{{ conversation.kind === 'group' && conversation.lastMessage?.senderName ? `${conversation.lastMessage.senderName}: ` : '' }}{{ conversation.lastMessage?.content ?? 'Sin mensajes' }}</span>
             </span>
-            <span v-if="conversation.unreadCount" class="rounded-full bg-sky-600 px-2 py-0.5 text-xs text-white" aria-label="Mensajes sin leer">{{ conversation.unreadCount }}</span>
+            <span v-if="conversation.unreadCount" class="flex min-w-4 items-center justify-center rounded-full bg-[#465fff] px-1 text-[10px] leading-4 text-white" aria-label="Mensajes sin leer">{{ conversation.unreadCount }}</span>
           </button>
         </li>
       </ul>
-      <p v-else class="p-4 text-sm text-slate-500 dark:text-slate-400">Aún no tienes chats con otras personas. Selecciona «Nuevo chat» para comenzar.</p>
+      <p v-else class="p-5 text-sm leading-6 text-slate-400">{{ chatSearch ? 'No hay conversaciones con ese nombre.' : chat.conversationFilter === 'groups' ? 'Aún no tienes grupos. Crea uno desde el botón +.' : 'Aún no hay conversaciones con otras personas. Usa el botón + para comenzar.' }}</p>
     </template>
   </aside>
 </template>

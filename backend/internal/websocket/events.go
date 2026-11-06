@@ -10,6 +10,7 @@ const (
 	EventConversationUpdated EventType = "conversation.updated"
 	EventMessageSend         EventType = "message.send"
 	EventMessageNew          EventType = "message.new"
+	EventMessageDeleted      EventType = "message.deleted"
 	EventMessageAck          EventType = "message.ack"
 	EventMessageRead         EventType = "message.read"
 	EventTyping              EventType = "typing"

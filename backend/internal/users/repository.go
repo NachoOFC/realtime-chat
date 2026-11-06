@@ -274,6 +274,7 @@ func (r *PostgresRepository) DeleteGuest(ctx context.Context, id string, expired
 		return result, err
 	}
 	_, err = tx.Exec(ctx, `UPDATE conversation_members cm SET unread_count=(SELECT count(*) FROM messages m WHERE m.conversation_id=cm.conversation_id AND m.sender_id<>cm.user_id
+ AND (cm.cleared_at IS NULL OR m.created_at>cm.cleared_at)
  AND (cm.last_read_message_id IS NULL OR (m.created_at,m.id)>(SELECT created_at,id FROM messages WHERE id=cm.last_read_message_id)))
  WHERE conversation_id=ANY($1::uuid[])`, result.ConversationIDs)
 	if err != nil {

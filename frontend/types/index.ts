@@ -59,6 +59,7 @@ export type ClientEvent =
     }
 
 export type ServerEvent =
+  | { type: 'message.deleted'; conversationId: string; messageId: string }
   | { type: 'conversation.updated'; conversationId: string }
   | { type: 'user.removed'; userId: string }
   | { type: 'auth.expired' }

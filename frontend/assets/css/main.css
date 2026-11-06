@@ -11,5 +11,15 @@ body,
 }
 
 body {
+  font-family: 'Outfit', 'Segoe UI', sans-serif;
   @apply bg-slate-100 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100;
 }
+
+.chat-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #d0d5dd transparent;
+}
+.dark .chat-scroll { scrollbar-color: #344054 transparent; }
+.chat-scroll::-webkit-scrollbar { width: 5px; }
+.chat-scroll::-webkit-scrollbar-thumb { background: #d0d5dd; border-radius: 8px; }
+.dark .chat-scroll::-webkit-scrollbar-thumb { background: #344054; }

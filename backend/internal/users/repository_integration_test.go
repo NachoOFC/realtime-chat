@@ -72,7 +72,7 @@ func TestGoogleAccountsAndGuestCleanup(t *testing.T) {
 	if err = pool.QueryRow(ctx, "SELECT current_schema()").Scan(&selected); err != nil || selected != schema {
 		t.Fatal("refusing to use an unisolated schema")
 	}
-	for _, name := range []string{"0001_init.up.sql", "0002_guest_users.up.sql", "0003_google_and_temporary_guests.up.sql", "0004_group_conversations.up.sql"} {
+	for _, name := range []string{"0001_init.up.sql", "0002_guest_users.up.sql", "0003_google_and_temporary_guests.up.sql", "0004_group_conversations.up.sql", "0005_chat_deletion.up.sql"} {
 		data, err := os.ReadFile(filepath.Join("../../migrations", name))
 		if err != nil {
 			t.Fatal(err)
@@ -387,7 +387,93 @@ func TestGoogleAccountsAndGuestCleanup(t *testing.T) {
 			t.Fatal("accepted duplicate members", err)
 		}
 	})
-	t.Log("Google recovery, guest cleanup, groups and membership boundaries verified")
+	t.Run("message deletion and private chat deletion", func(t *testing.T) {
+		other, _, err := service.GoogleLogin(ctx, GoogleIdentity{Subject: "deletion-other", Email: "deletion-other@example.test", Name: "Otra"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		outsider, _, err := service.GoogleLogin(ctx, GoogleIdentity{Subject: "deletion-outsider", Email: "deletion-outsider@example.test", Name: "Fuera"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		conversation, err := chats.CreateDirect(ctx, account.ID, other.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		own, err := chats.SendMessage(ctx, account.ID, conversation.ID, uuid.NewString(), "Eliminar para todos")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = chats.SendMessage(ctx, other.ID, conversation.ID, uuid.NewString(), "Conservar para la otra persona"); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = chats.DeleteMessage(ctx, other.ID, conversation.ID, own.ID); !errors.Is(err, chat.ErrForbidden) {
+			t.Fatal("participant deleted another person's message", err)
+		}
+		if _, err = chats.DeleteMessage(ctx, outsider.ID, conversation.ID, own.ID); !errors.Is(err, chat.ErrForbidden) {
+			t.Fatal("outsider deleted a message", err)
+		}
+		if err = chats.DeleteConversation(ctx, outsider.ID, conversation.ID); !errors.Is(err, chat.ErrForbidden) {
+			t.Fatal("outsider cleared a chat", err)
+		}
+		if err = chats.MarkRead(ctx, other.ID, conversation.ID, own.ID); err != nil {
+			t.Fatal(err)
+		}
+		participants, err := chats.DeleteMessage(ctx, account.ID, conversation.ID, own.ID)
+		if err != nil || len(participants) != 2 {
+			t.Fatal("deletion recipients", err)
+		}
+		page, err := chats.ListMessages(ctx, other.ID, conversation.ID, "", 30)
+		if err != nil || len(page.Messages) != 1 || page.Messages[0].ID == own.ID {
+			t.Fatal("deleted message survived", err)
+		}
+		if err = chats.DeleteConversation(ctx, account.ID, conversation.ID); err != nil {
+			t.Fatal(err)
+		}
+		list, err := chats.ListConversations(ctx, account.ID)
+		if err != nil || hasConversation(list, conversation.ID) {
+			t.Fatal("cleared chat still listed", err)
+		}
+		page, err = chats.ListMessages(ctx, account.ID, conversation.ID, "", 30)
+		if err != nil || len(page.Messages) != 0 {
+			t.Fatal("cleared history visible to actor", err)
+		}
+		page, err = chats.ListMessages(ctx, other.ID, conversation.ID, "", 30)
+		if err != nil || len(page.Messages) != 1 {
+			t.Fatal("another person's history was cleared", err)
+		}
+		fresh, err := chats.SendMessage(ctx, other.ID, conversation.ID, uuid.NewString(), "Nuevo mensaje")
+		if err != nil {
+			t.Fatal(err)
+		}
+		list, err = chats.ListConversations(ctx, account.ID)
+		if err != nil || !hasConversation(list, conversation.ID) {
+			t.Fatal("new incoming message did not restore chat", err)
+		}
+		page, err = chats.ListMessages(ctx, account.ID, conversation.ID, "", 30)
+		if err != nil || len(page.Messages) != 1 || page.Messages[0].ID != fresh.ID {
+			t.Fatal("old cleared history resurfaced", err)
+		}
+		page, err = chats.ListMessages(ctx, other.ID, conversation.ID, "", 30)
+		if err != nil || len(page.Messages) != 2 {
+			t.Fatal("recipient lost history", err)
+		}
+		if err = chats.DeleteConversation(ctx, account.ID, conversation.ID); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = chats.CreateDirect(ctx, account.ID, other.ID); err != nil {
+			t.Fatal(err)
+		}
+		list, err = chats.ListConversations(ctx, account.ID)
+		if err != nil || !hasConversation(list, conversation.ID) {
+			t.Fatal("could not reopen chat", err)
+		}
+		page, err = chats.ListMessages(ctx, account.ID, conversation.ID, "", 30)
+		if err != nil || len(page.Messages) != 0 {
+			t.Fatal("reopening restored cleared messages", err)
+		}
+	})
+	t.Log("Google recovery, groups, private deletions and authorization verified")
 }
 
 func hasConversation(conversations []chat.Conversation, id string) bool {

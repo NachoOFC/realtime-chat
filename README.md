@@ -1,6 +1,6 @@
 # Realtime Chat
 
-Chat 1:1 en tiempo real estilo WhatsApp. Incluye acceso con Google o apodo temporal, conversaciones privadas, persistencia en PostgreSQL, WebSockets, soporte HTTPS/WSS y un asistente de IA con Google Gemini.
+Chat privado y en grupos en tiempo real. Incluye acceso con Google o apodo temporal, persistencia en PostgreSQL, WebSockets, soporte HTTPS/WSS y un asistente con Google Gemini.
 
 ## Stack
 
@@ -163,13 +163,15 @@ Comprueba la API en `http://localhost:8080/healthz`. PM2 mantiene el backend en 
 
 ## Acceso con Google o apodo
 
-En `/login` puedes entrar con Google o como invitado con apodo. Google permite recuperar la misma cuenta y su historial; al salir como invitado se eliminan su perfil y sus mensajes. Para entrar necesitas el backend y PostgreSQL con las tres migraciones aplicadas. [Configurar Google y conocer la política de invitados](docs/google-y-invitados.md).
+En `/login` puedes entrar con Google o como invitado con apodo. Google permite recuperar la misma cuenta y su historial; al salir como invitado se eliminan su perfil y sus mensajes. Para entrar necesitas el backend y PostgreSQL con las cinco migraciones aplicadas. [Configurar Google y conocer la política de invitados](docs/google-y-invitados.md).
 
 ## Chat y TLS
 
 Entra con un apodo y selecciona **Nuevo chat** para buscar otro usuario. Para probar dos sesiones, abre una ventana de incógnito con otro apodo. El chat guarda los mensajes, recupera el historial por páginas, confirma lecturas e indica quién está escribiendo.
 
 - [Configurar Google e invitados temporales](docs/google-y-invitados.md)
+- [Crear grupos y volver a la última cuenta](docs/grupos-y-acceso.md)
+- [Eliminar mensajes y chats](docs/eliminar-mensajes-y-chats.md)
 - [Activar IACHAT con Google Gemini](docs/asistente-ia.md)
 - [Configurar HTTPS/WSS local y en producción](docs/tls.md)
 - [Ejemplo de lo que guarda cada tabla](docs/datos-ejemplo.md)

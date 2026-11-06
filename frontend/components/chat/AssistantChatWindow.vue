@@ -8,6 +8,8 @@ const assistant = useAssistantStore()
 const auth = useAuthStore()
 const chat = useChatStore()
 const content = ref('')
+const clearOpen = ref(false)
+function clearHistory() { assistant.reset(); clearOpen.value = false; void assistant.loadStatus() }
 const scroller = ref<HTMLElement | null>(null)
 const canWrite = computed(() => assistant.enabled && !assistant.loadingStatus && !assistant.sending && !!auth.user?.id)
 
@@ -35,19 +37,20 @@ async function submit() {
 </script>
 
 <template>
-  <section class="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" aria-label="Chat con IACHAT">
-    <header class="flex shrink-0 items-center gap-3 border-b border-slate-200 px-4 py-3 dark:border-slate-700">
+  <section class="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900" aria-label="Chat con IACHAT">
+    <header class="flex shrink-0 items-center gap-3 border-b border-slate-200 px-5 py-4 dark:border-slate-800">
       <button type="button" class="rounded-lg border border-slate-300 px-2 py-1 text-sm text-slate-600 dark:border-slate-600 dark:text-slate-300 md:hidden" @click="chat.activeConversationId = null">
         Volver
       </button>
-      <span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-slate-200 text-xs font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-200" aria-hidden="true">IA</span>
-      <div>
+      <ChatAvatar name="IACHAT" :assistant="true" />
+      <div class="flex-1">
         <p class="font-medium">IACHAT</p>
         <p class="text-xs text-slate-500 dark:text-slate-400">Gemini</p>
       </div>
+      <button type="button" class="flex size-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-red-600 dark:hover:bg-slate-800" aria-label="Borrar historial de IACHAT" title="Borrar historial" @click="clearOpen = true"><ChatIcon name="trash" :size="18" /></button>
     </header>
 
-    <div ref="scroller" class="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain bg-white px-4 py-4 dark:bg-slate-900" role="log" aria-label="Mensajes con IACHAT" aria-live="polite">
+    <div ref="scroller" class="chat-scroll min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain px-5 py-6" role="log" aria-label="Mensajes con IACHAT" aria-live="polite">
       <div v-if="!assistant.messages.length" class="mx-auto max-w-sm px-3 py-12 text-center">
         <p class="text-sm text-slate-500 dark:text-slate-400">Escribe una pregunta para comenzar.</p>
       </div>
@@ -88,5 +91,6 @@ async function submit() {
         </button>
       </form>
     </footer>
+    <ConfirmDialog :open="clearOpen" title="¿Borrar el historial de IACHAT?" message="Se borrarán los mensajes de esta conversación en este navegador. Podrás iniciar una conversación nueva cuando quieras." confirm-label="Borrar historial" @cancel="clearOpen = false" @confirm="clearHistory" />
   </section>
 </template>

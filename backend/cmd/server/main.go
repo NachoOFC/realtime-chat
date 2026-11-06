@@ -55,6 +55,11 @@ func main() {
 	chatHandler := chat.NewHandler(chatService)
 
 	hub := ws.NewHub()
+	chatHandler.OnMessageDeleted = func(id, messageID string, userIDs []string) {
+		for _, userID := range userIDs {
+			hub.SendToUser(userID, ws.OutboundEvent{Type: ws.EventMessageDeleted, ConversationID: id, MessageID: messageID})
+		}
+	}
 	chatHandler.OnChanged = func(id string, userIDs []string, removedUserID string) {
 		if removedUserID != "" {
 			hub.RemoveUserFromConversation(removedUserID, id)
