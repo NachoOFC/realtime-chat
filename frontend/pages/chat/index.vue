@@ -34,6 +34,10 @@ function markVisibleRead() {
 onMounted(async () => {
   stopListening = socket.onEvent(event => {
     switch (event.type) {
+      case 'message.deleted':
+        chat.removeMessage(event.conversationId, event.messageId)
+        void refreshConversations()
+        break
       case 'conversation.updated':
         void refreshConversations()
         break
@@ -121,6 +125,7 @@ watch([() => chat.activeConversationId, () => chat.activeMessages.at(-1)?.id, ()
 </script>
 <template>
   <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
+    <div class="mb-5 flex shrink-0 items-center justify-between"><h1 class="text-xl font-semibold tracking-tight">{{ chat.conversationFilter === 'groups' ? 'Grupos' : 'Chats' }}</h1></div>
     <div
       v-if="chat.errorMessage"
       class="mb-3 flex shrink-0 items-center justify-between rounded-lg bg-amber-50 dark:bg-amber-950 px-3 py-2 text-sm text-amber-800 dark:text-amber-200"
@@ -130,7 +135,7 @@ watch([() => chat.activeConversationId, () => chat.activeMessages.at(-1)?.id, ()
     </div>
 
     <div
-      class="flex min-h-0 flex-1 overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
+      class="flex min-h-0 flex-1 gap-5 max-md:gap-0"
     >
       <ChatList />
       <AssistantChatWindow v-if="chat.activeConversationId === ASSISTANT_CONVERSATION_ID" />

@@ -133,7 +133,7 @@ test('failed sends roll back the pending message and can be retried without dupl
   assert.equal(assistant.sending, false)
   assert.equal(assistant.messages.length, 2)
   assert.equal(assistant.messages.some(item => item.status === 'sending'), false)
-  assert.match(assistant.errorMessage, /Espera un momento/)
+  assert.match(assistant.errorMessage, /límite de uso/)
   assert.doesNotMatch(assistant.errorMessage, /sensitive provider response/)
 
   const retry = assistant.send('retry this', 'user')

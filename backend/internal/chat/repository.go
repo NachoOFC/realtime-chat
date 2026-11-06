@@ -33,6 +33,8 @@ type Repository interface {
 	IsMember(context.Context, string, string) (bool, error)
 	MemberIDs(context.Context, string, string) ([]string, error)
 	MarkRead(context.Context, string, string, string) error
+	DeleteMessage(context.Context, string, string, string) ([]string, error)
+	DeleteConversation(context.Context, string, string) error
 }
 
 type PostgresRepository struct{ pool *pgxpool.Pool }
@@ -59,7 +61,7 @@ const conversationQuery = `SELECT c.id::text, COALESCE(peer.id::text, ''), COALE
  JOIN conversation_members mine ON mine.conversation_id = c.id AND mine.user_id = $1
  LEFT JOIN conversation_members other ON other.conversation_id = c.id AND other.user_id <> $1 AND c.kind='direct'
  LEFT JOIN users peer ON peer.id = other.user_id
- LEFT JOIN LATERAL (SELECT * FROM messages WHERE conversation_id = c.id
+ LEFT JOIN LATERAL (SELECT * FROM messages WHERE conversation_id = c.id AND (mine.cleared_at IS NULL OR created_at>mine.cleared_at)
  ORDER BY created_at DESC, id DESC LIMIT 1) last ON true`
 
 func scanConversation(row pgx.Row) (Conversation, error) {
@@ -78,7 +80,7 @@ func scanConversation(row pgx.Row) (Conversation, error) {
 }
 
 func (r *PostgresRepository) ListConversations(ctx context.Context, userID string) ([]Conversation, error) {
-	rows, err := r.pool.Query(ctx, conversationQuery+` WHERE c.kind='group' OR peer.id IS NOT NULL OR last.id IS NOT NULL
+	rows, err := r.pool.Query(ctx, conversationQuery+` WHERE NOT mine.is_hidden AND (c.kind='group' OR peer.id IS NOT NULL OR last.id IS NOT NULL)
  ORDER BY COALESCE(last.created_at, c.created_at) DESC, c.id`, userID)
 	if err != nil {
 		return nil, err
@@ -120,6 +122,9 @@ func (r *PostgresRepository) FindOrCreateDirect(ctx context.Context, userID, pee
 	_, err = tx.Exec(ctx, `INSERT INTO conversation_members (conversation_id, user_id)
  VALUES ($1, $2), ($1, $3) ON CONFLICT DO NOTHING`, id, ids[0], ids[1])
 	if err != nil {
+		return Conversation{}, err
+	}
+	if _, err = tx.Exec(ctx, `UPDATE conversation_members SET is_hidden=false WHERE conversation_id=$1 AND user_id=$2`, id, userID); err != nil {
 		return Conversation{}, err
 	}
 	c, err := scanConversation(tx.QueryRow(ctx, conversationQuery+` WHERE c.id = $2`, userID, id))
@@ -178,14 +183,15 @@ func (r *PostgresRepository) ListMessages(ctx context.Context, userID, conversat
  WHERE cm.conversation_id=messages.conversation_id AND cm.user_id<>messages.sender_id
  AND (seen.created_at,seen.id)>=(messages.created_at,messages.id)) THEN 'read' ELSE 'sent' END,
  (SELECT username FROM users WHERE id=messages.sender_id)
- FROM messages WHERE conversation_id = $1`
-	args := []any{conversationID, limit + 1}
+ FROM messages WHERE conversation_id = $1 AND EXISTS(SELECT 1 FROM conversation_members cm
+ WHERE cm.conversation_id=messages.conversation_id AND cm.user_id=$3 AND (cm.cleared_at IS NULL OR messages.created_at>cm.cleared_at))`
+	args := []any{conversationID, limit + 1, userID}
 	if before != "" {
 		cursor, err := decodeCursor(before)
 		if err != nil {
 			return MessagePage{}, err
 		}
-		query += ` AND (created_at, id) < ($3, $4::uuid)`
+		query += ` AND (created_at, id) < ($4, $5::uuid)`
 		args = append(args, cursor.At, cursor.ID)
 	}
 	rows, err := r.pool.Query(ctx, query+` ORDER BY created_at DESC, id DESC LIMIT $2`, args...)
@@ -254,7 +260,7 @@ func (r *PostgresRepository) CreateMessage(ctx context.Context, userID, conversa
 	} else if err != nil {
 		return Message{}, err
 	} else {
-		_, err = tx.Exec(ctx, `UPDATE conversation_members SET unread_count=unread_count+1 WHERE conversation_id=$1 AND user_id<>$2`, conversationID, userID)
+		_, err = tx.Exec(ctx, `UPDATE conversation_members SET unread_count=unread_count+CASE WHEN user_id<>$2 THEN 1 ELSE 0 END,is_hidden=false WHERE conversation_id=$1`, conversationID, userID)
 		if err != nil {
 			return Message{}, err
 		}
@@ -311,7 +317,7 @@ func (r *PostgresRepository) MarkRead(ctx context.Context, userID, conversationI
 		return err
 	}
 	_, err = tx.Exec(ctx, `UPDATE conversation_members cm SET last_read_message_id=$3,
- unread_count=(SELECT count(*) FROM messages WHERE conversation_id=$1 AND sender_id<>$2 AND (created_at,id)>($4::timestamptz,$3::uuid))
+ unread_count=(SELECT count(*) FROM messages WHERE conversation_id=$1 AND sender_id<>$2 AND (created_at,id)>($4::timestamptz,$3::uuid) AND (cm.cleared_at IS NULL OR created_at>cm.cleared_at))
  WHERE cm.conversation_id=$1 AND cm.user_id=$2 AND (cm.last_read_message_id IS NULL OR
  (SELECT (created_at,id) FROM messages WHERE id=cm.last_read_message_id) <= ($4::timestamptz,$3::uuid))`, conversationID, userID, messageID, at)
 	if err != nil {

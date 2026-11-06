@@ -101,7 +101,7 @@ test('creating a group selects it and loads history through the normal conversat
   const { chat, requests } = setup()
   const creating = chat.createGroup('Amigos', ['other'])
   requests[0].resolve({ id: 'group', kind: 'group', name: 'Amigos', peer: { id: '' }, members: [] })
-  await Promise.resolve()
+  await new Promise(resolve => setImmediate(resolve))
   requests[1].resolve({ messages: [] })
   assert.equal(await creating, true)
   assert.equal(chat.activeConversationId, 'group')
@@ -130,5 +130,36 @@ test('a group invitation response from a previous identity is discarded', async 
   chat.reset()
   requests[0].resolve({ id: 'group', kind: 'group', members: [{ id: 'private-old-member' }] })
   assert.equal(await adding, false)
+  assert.equal(chat.conversations.length, 0)
+})
+
+test('deleted messages cannot return through late history responses or socket acknowledgements', async () => {
+  const { chat, requests } = setup()
+  chat.upsertMessage(message('deleted'))
+  const stale = chat.loadMessages('chat')
+  chat.removeMessage('chat', 'deleted')
+  requests[0].resolve({ messages: [message('deleted')] })
+  await stale
+  assert.equal(chat.upsertMessage(message('deleted')), false)
+  assert.equal(chat.messages.chat.length, 0)
+  const fresh = chat.loadMessages('chat')
+  requests[1].resolve({ messages: [message('deleted'), message('kept')] })
+  await fresh
+  assert.deepEqual(Array.from(chat.messages.chat, m => m.id), ['kept'])
+})
+
+test('deleting a chat discards its cached history and an older list cannot restore it', async () => {
+  const { chat, requests } = setup()
+  chat.conversations = [{ id: 'chat' }]
+  chat.activeConversationId = 'chat'
+  chat.upsertMessage(message('old-history'))
+  const stale = chat.loadConversations()
+  const removing = chat.deleteConversation('chat')
+  requests[1].resolve()
+  assert.equal(await removing, true)
+  requests[0].resolve([{ id: 'chat' }])
+  await stale
+  assert.equal(chat.messages.chat, undefined)
+  assert.equal(chat.activeConversationId, null)
   assert.equal(chat.conversations.length, 0)
 })

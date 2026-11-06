@@ -11,8 +11,9 @@ import (
 )
 
 type Handler struct {
-	service   *Service
-	OnChanged func(conversationID string, userIDs []string, removedUserID string)
+	service          *Service
+	OnChanged        func(conversationID string, userIDs []string, removedUserID string)
+	OnMessageDeleted func(conversationID, messageID string, userIDs []string)
 }
 
 func (h *Handler) notifyGroup(c Conversation) {

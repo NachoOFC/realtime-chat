@@ -11,7 +11,7 @@ La insignia **Google** indica el proveedor usado para iniciar sesión. No afirma
 
 ## Preparar la base de datos
 
-En una instalación existente, ejecuta solo `backend/migrations/0003_google_and_temporary_guests.up.sql` después de las migraciones 0001 y 0002. En una base nueva, aplica las tres en orden.
+Para el acceso con Google, aplica `backend/migrations/0003_google_and_temporary_guests.up.sql` después de las migraciones 0001 y 0002. Los grupos necesitan `0004_group_conversations.up.sql`, y el borrado de chats necesita `0005_chat_deletion.up.sql`. En una base nueva, aplica las cinco en orden; en una existente, ejecuta únicamente las pendientes.
 
 La migración agrega `google_subject` y `guest_expires_at` a `users`. No borra cuentas al ejecutarla; asigna a los invitados anteriores un plazo de transición de 24 horas. Cuando el backend nuevo está activo, elimina los invitados cuyo acceso vence. Las cuentas Google y las cuentas con contraseña permanecen.
 
